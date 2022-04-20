@@ -1,0 +1,4 @@
+<launch>
+	<node pkg="silver2" type="phantom_visualizer.py" output="screen"  name="phantom"/>	
+	<node pkg="silver2" type="silver_locomotion.py" output="screen"  name="locomotion_node" args="1"/>	
+</launch>

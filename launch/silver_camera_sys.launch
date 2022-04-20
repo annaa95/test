@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="silver2" type="gimbal_server.py"  output="screen" name="gimbal_node"/>
+    <node pkg="silver2" type="CamerasPub.py" name="camera_node" output="screen" args="1"/>
+</launch>

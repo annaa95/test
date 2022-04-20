@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="silver2" type="silver_locomotion.py" output="screen"  name="locomotion_node" args="0"/>
+</launch>
+
+

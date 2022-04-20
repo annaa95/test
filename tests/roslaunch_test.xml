@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+  <group ns="extern_ros_controller_webots">
+    <include file="$(find silver3)/launch/s3_launch.launch"/>
+  </group>
+</launch>
