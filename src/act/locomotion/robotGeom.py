@@ -6,6 +6,7 @@ from __future__ import division
 import sys, os
 import numpy as np
 import numpy.matlib
+from interfaceDevice import SimRobot, RealRobot
 import dynamixel_communication.dynamixel as dxl
 from locomotion.robot_def import *	# Constant definitions
 import time
@@ -18,42 +19,43 @@ from silver_msgs.msg import PhantomVisualization
 import pylab
 import threading
 
-static_poses_vel = {"slow": 0.5*np.ones(18),
-                    "medium": 3*np.ones(18),
-                    "fast": 7.5*np.ones(18)}
-
-static_poses_pos = {"zero": np.zeros(18),
-                    "min": -90*np.ones(18),
-                    "max": 90*np.ones(18),
-                    "std": np.array([45,50,100,0,50,100,-45,50,100,-45,50,100,0,50,100,45,50,100]),
-                    "low_torque": np.array([45,-75,0, 0,-75,0, -45,-75,0, -45,-75,0, 0,-75,0, 45,-75,0]),
-                    "folded": np.array([0,90,160,0,90,160,0,90,160,0,90,160,0,90,160,0,90,160]),
-                    #"dragon": np.array([45,70,150,0,70,150,-45,70,150,-45,70,150,0,70,150,45,70,150])
-                    "dragon": np.array([45,50,130,0,50,130,-45,50,130,-45,50,130,0,50,130,45,50,130])
-                   }
-
 class Robot:
-        def __init__(self, leg_num, leg_joints, limits_file, init_pose, phantom, manipulator):
-                #Constructor v1 gets only number of legs leg_num and number of joints per leg leg_joints as arguments
-                # and applies a calibration procedure to set zeros and limits.
-                #Constructor v2 also gets three arrays of size leg_num*leg_joints to specifify zero and limits without
-                # doing the calibration procedure
-                #Both initialize the motorHandler object, define relevant robot poses and set initial pose
-                #Choose the robot (0) or the phantom (1) mode.
-                self.phantom = phantom
+        def __init__(self, 
+                    leg_num = 6, 
+                    leg_joints = 3, 
+                    limits_file='/locomotion/trajectories/limits.txt', 
+                    init_pose = 'folded', 
+                    outputDevice = "Sim"): #manipulator input(?)
+                
+                # check if the output device is admissible
+                if outputDevice == "Sim":
+                    self.inOutFnct = SimRobot
+                elif outputDevice == "Hard":
+                    self.inOutFnct = RealRobot
+                else:
+                    print("None of admitted output devices. Picking the default")
+                    self.inOutFnct = SimRobot
+
                 #Structural characteristics of the robot.
                 self.leg_num = leg_num			#Number of legs
-                self.leg_joints = leg_joints	#Number of joints in a leg
-                self.joint_num = self.leg_num*self.leg_joints  #Number of joints in the robot
-                self.l0 = 8 					#Lengths of leg segments in cm
+                self.leg_joints = leg_joints	        #Number of joints in a leg
+                self.joint_num = leg_num*leg_joints     #Number of joints in the robot
+                
+                self.l0 = 8 				#Lengths of leg segments in cm
                 self.l1 = 7
                 self.l2 = 30
                 self.l3 = 32.3 	#26 without foot
+                
                 self.body_length = 40			#Dimensions of body in cm
                 self.body_width = 55
+                
                 #[min,max] range of joints positioning in rad.
                 self.q_min = np.array([-np.pi/2, -np.pi/2, -np.pi/4])
                 self.q_max = np.array([np.pi/2, np.pi/2, 3/4*np.pi])
+
+                # Modern Robotics approach requirements: 
+                #   Mhome configurations (position of end effector when all joint are at 0 position) 4x4 matrix
+                #   Sn = (ωn, vn) is the screw axis of joint n as expressed in the fixed base frame 6x1
                 #Position of leg frames within the base frame.
                 self.leg_frame_b = np.zeros([self.leg_num,3])
                 self.leg_frame_b[0,:] = np.array([self.body_length/2, self.body_width/2, 0])
@@ -67,7 +69,9 @@ class Robot:
                 self.l_pos = np.array([1, 1, -1, 1, 1, -1])
                 self.zeros = np.zeros(self.leg_joints*self.leg_num+1, dtype='int')
                 self.sign = np.array([-1, -1, 1, -1, -1, 1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, -1, 1])
+                
                 #coxa joint rest position in deg.
+                
                 #self.rest_coxa_angle = np.zeros(6) #mrudul coxa 0, erase after experiments
                 self.rest_coxa_angle = np.array([45, 0, -45, -45, 0, 45])*np.pi/180
                 self.rest_coxa_angle_rot = np.array([60, 0, -60, -60, 0, 60])*np.pi/180
