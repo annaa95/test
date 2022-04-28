@@ -16,7 +16,7 @@ from setuptools import setup
 from catkin_pkg.python_setup import generate_distutils_setup
 
 d = generate_distutils_setup(
-    packages=['sll_extern_roscontroller'],
+    packages=['silver3'],
     package_dir={'': 'src'},
     requires=['roslib', 'rospy']
 )

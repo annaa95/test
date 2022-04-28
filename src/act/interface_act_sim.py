@@ -1,9 +1,9 @@
 from abc import abstractmethod
 
-from .interface import RobotInOut
+from .interface_act import RobotMotorControl
 from controller import Robot
 
-class SimRobot(RobotInOut):
+class SimRobot(RobotMotorControl):
     def __init__(self,
                 motor_list,
                  time_step=None):

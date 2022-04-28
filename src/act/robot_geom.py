@@ -5,9 +5,9 @@
 from __future__ import division
 import sys, os
 import numpy as np
-from interface_act_sim import SimRobot
-from interface_act_rob import RealRobot
-from locomotion.robot_def import *	# Constant definitions
+from .interface_act_sim import SimRobot
+from .interface_act_rob import RealRobot
+from .locomotion.robot_def import *	# Constant definitions
 import time
 import math
 from scipy.spatial import Delaunay
@@ -19,9 +19,9 @@ parentDir = os.path.dirname(fileDir)
 path = sys.path
 path.append(parentDir)
 
-class Robot():
+class RobotGeom():
         def __init__(self, 
-                    leg_num = 6, 
+                    leg_num = 1, 
                     leg_joints = 3, 
                     limits_file='/locomotion/trajectories/limits.txt', 
                     init_pose = 'folded', 
@@ -54,11 +54,12 @@ class Robot():
                 self.q_max = np.zeros(3)
                 for i in range(self.leg_joints):
                         self.q_min[i], self.q_max[i] = self.inOutFnct.get_pos_limits(i+1) #np.array([-np.pi/2, -np.pi/2, -np.pi/4])
-                #self.q_max = np.array([np.pi/2, np.pi/2, 3/4*np.pi])
+                                                                                        #self.q_max = np.array([np.pi/2, np.pi/2, 3/4*np.pi])
 
                 # Modern Robotics approach requirements: 
                 #   Mhome configurations (position of end effector when all joint are at 0 position) 4x4 matrix
                 #   Sn = (ωn, vn) is the screw axis of joint n as expressed in the fixed base frame 6x1
+                
                 #Position of leg frames within the base frame.
                 self.leg_frame_b = np.zeros([self.leg_num,3])
                 self.leg_frame_b[0,:] = np.array([self.body_length/2, self.body_width/2, 0])
@@ -178,14 +179,6 @@ class Robot():
                 return q
 
         def admissible(self, T):
-                """
-                Test if points in `T` are in `hull`
-
-                `T` should be a `NxK` coordinates of `N` points in `K` dimensions
-                `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the
-                coordinates of `M` points in `K`dimensions for which Delaunay triangulation
-                will be computed
-                """
                 if not isinstance(self.cloud,Delaunay):
                         ws = Delaunay(self.cloud)
                         test = ws.find_simplex(T)>=0
@@ -238,8 +231,29 @@ class Robot():
                 XfYf = np.transpose(np.dot(XsYs, np.transpose(TransfMat)))
 
                 return XfYf
-
-        def trj_gen(self,w,h,alpha,s,beta,delta_z,phi,n_step,gait_t,leg_id, rotation):
+        
+        def cartesian2joint_traj(self, T, dT):
+                """
+                Traduzione di una traiettoria T = [x,y,z](t) Nx3 (with N time frames, and 3 coordinate end effectors)
+                with dT = time to complete the trjectory in seconds
+                in angoli di giunto Q[rad], velocità Qdot [rad/s] e check ammissibilità
+                """
+                # check admissibility and compute inverse kinematics and joint velocities
+                Q = np.zeros([3, len(T)])
+                Qdot = np.zeros([3, len(T)])
+                admiss = self.admissible(np.transpose(T))
+                if admiss:
+                    for i in range(len(T)):
+                        Q[:,i] = self.inv_kine(T[:,i])
+                    delta_t = dT/len(T)
+                    Qdot[:,0] = Q[:,len(T)-1]-Q[:,0]
+                    Qdot[:,1:len(T)] = np.abs(np.diff(Q[:,0:len(T)])/delta_t)
+                else:
+                    print('non admissible trj for leg_id: ')
+                
+                return Q, Qdot, admiss
+        
+        def static_OL_traj(self,w,h,alpha,s,beta,delta_z,phi,n_step,gait_t,leg_id, rotation):
                 """Gait parameters
                 w = 40 #gait width [cm] ---> [x_c, y_c] for each leg
                 h = 25 #gait height [cm]
@@ -309,31 +323,7 @@ class Robot():
                 y = np.hstack((y_s,y_f))
                 z = np.hstack((z_s,z_f))
                 T = np.vstack((x,y,z))
-                # check admissibility and compute inverse kinematics and joint velocities
-                Q = np.zeros([3, n_step])
-                Qdot = np.zeros([3, n_step])
-                admiss = self.admissible(np.transpose(T))
-                if admiss:
-                    for i in range(0,n_step):
-                        Q[:,i] = self.leg_inv_kine(T[:,i], leg_id)
-                    delta_t = gait_t/n_step
-                    Qdot[:,0] = Q[:,n_step-1]-Q[:,0]
-                    Qdot[:,1:n_step] = np.abs(np.diff(Q[:,0:n_step])/delta_t)
-                else:
-                    print('non admissible trj for leg_id: '+ str(leg_id))
-        		# apply phase lag
-                index = int(n_step*(phi/360))
-                Q_tmp = np.zeros(Q.shape)
-                Qdot_tmp = np.zeros(Qdot.shape)
-                T_tmp = np.zeros(T.shape)
-                Q_tmp[:, 0:index] = Q[:,n_step-index:n_step]
-                Q_tmp[:,index:n_step] = Q[:,0:n_step-index]
-                Qdot_tmp[:, 0:index] = Qdot[:,n_step-index:n_step]
-                Qdot_tmp[:,index:n_step] = Qdot[:,0:n_step-index]
-                T_tmp[:, 0:index] = T[:,n_step-index:n_step]
-                T_tmp[:,index:n_step] = T[:,0:n_step-index]
-                
-                return T_tmp, Q_tmp*180/np.pi, Qdot_tmp*180/np.pi, admiss
+                return T
 
         def get_leg_slice(self, data, leg_id):
                 #Data: array of size leg_joints*joint_num

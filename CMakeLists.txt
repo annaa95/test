@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
+
 project(silver3)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
@@ -7,6 +8,7 @@ project(silver3)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
+
 find_package(catkin REQUIRED COMPONENTS
   std_msgs
   std_srvs
@@ -54,11 +56,9 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+add_service_files(DIRECTORY srv FILES
+   BhvSelector.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -168,7 +168,7 @@ install(DIRECTORY launch
 
 
 
-catkin_install_python(PROGRAMS src/s3_runner.py
+catkin_install_python(PROGRAMS src/robot_runner.py
         DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html

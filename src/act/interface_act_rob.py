@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from collections.abc import Iterable
 
-from interface_act import RobotOut
+from .interface_act import RobotMotorControl
 
 import sys, tty, termios
 import threading
@@ -10,7 +10,7 @@ fd = sys.stdin.fileno()
 old_settings = termios.tcgetattr(fd)
 
 from dynamixel_sdk import *    # Uses Dynamixel SDK library
-from peripherals_def.dynamixel_communication.dynamixel_def import *     # Constant definitions
+from .peripherals_def.dynamixel_communication.dynamixel_def import *     # Constant definitions
 
 import time
 import numpy as np
@@ -23,7 +23,7 @@ def getch():
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
 
-class RealRobot(RobotOut):
+class RealRobot(RobotMotorControl):
     def __init__(self,
                 motor_list,
                 limits_file='/locomotion/trajectories/limits.txt', 
@@ -94,6 +94,9 @@ class RealRobot(RobotOut):
     def torque_enable(self, motor_id):
         if type(ids)==np.int32:
             ids = np.array([ids],dtype="int")
+
+        self.motor_lock.acquire()
+
         for i in ids:
             dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_PRO_TORQUE_ENABLE, TORQUE_ENABLE)
             if dxl_comm_result != COMM_SUCCESS:
@@ -102,12 +105,17 @@ class RealRobot(RobotOut):
                 print("%s" % self.packetHandler.getRxPacketError(dxl_error))
             else:
                 print("Dynamixel#%d - Torque Enabled" % i)
+        
+        self.motor_lock.release()
+
 
     def torque_disable(self, motor_id):
         #Disable torque for relId motors. relId is an array with 1,2 or 3 elements
         # handles scalar case
         if type(ids)==np.int32:
             ids = np.array([ids],dtype="int")
+             
+        #perform routine on dynamixel
         for i in ids:
             dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_PRO_TORQUE_ENABLE, TORQUE_DISABLE)
             if dxl_comm_result != COMM_SUCCESS:
@@ -116,13 +124,21 @@ class RealRobot(RobotOut):
                 print("%s" % self.packetHandler.getRxPacketError(dxl_error))
             else:
                 print("Dynamixel#%d - Torque Disabled" % i)  
-    
+
     @abstractmethod
     def get_pos(self,motor_id):
         """
         Return the current position of a given motor, in radians
         """
         pass
+    
+    def set_pos(self, motor_id, vel, pos):
+        # motor lock acquire and release prevents other thread to interfere in the
+        # writing procedure
+            self.motor_lock.acquire()
+            self.allocate_conf(motor_id, vel, pos)
+            self.set_conf()
+            self.motor_lock.release()
 
     def set_pos_limits(self, motor_id, minPosLim, maxPosLim):
         """
@@ -186,6 +202,30 @@ class RealRobot(RobotOut):
         
         return q_min_pos, q_max_pos
     
+    def get_info(self, motor_id):
+        """
+        returns status for all motors with relId
+        if dxl_status[i] is 32, motor i is in overload   
+        """ 
+        self.motor_lock.acquire()
+    
+        dxl_status = np.zeros(len(motor_id),dtype = 'int')
+        
+        for i in range(len(motor_id)):
+            # get status
+            dxl_status[i], dxl_comm_result, dxl_error = self.packetHandler.read1ByteTxRx(self.portHandler, motor_id[i], ADDR_ERROR_STATUS)
+            if dxl_comm_result != COMM_SUCCESS:
+                print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+            elif dxl_error != 0:
+                print("%s" % self.packetHandler.getRxPacketError(dxl_error))
+        
+        self.motor_lock.release()
+        return dxl_status
+    
+    #########################################################################
+    """
+    Conversion functions
+    """
     def d_from_q(self, motor_id, q):
         """      
         Input motor_id and joint coordinate in radians (q)
@@ -217,30 +257,66 @@ class RealRobot(RobotOut):
         for i in range(len(motor_id)):
                 q[i] = self.sign[motor_id[i]-1]*(d[i] - self.motor_zeros[motor_id[i]-1])*POS_UNIT
         return q      
+    
+    def profvel_from_qdot(self, qdot):
+        """
+        converts joint velocity qdot in deg/s to profvel motor command
+        """
+        profvel =  qdot*6/VEL_UNIT
+        return profvel.astype(int)
 
-    def get_info(self, motor_id):
-        #returns status for all motors with relId
-        #if dxl_status[i] is 32, motor i is in overload
-        dxl_status = np.zeros(len(ids),dtype = 'int')#[0 for i in ids]
-        counter = 0
-        for i in motor_id:
-            # get status
-            dxl_status[counter], dxl_comm_result, dxl_error = self.packetHandler.read1ByteTxRx(self.portHandler, i, ADDR_ERROR_STATUS)
-            if dxl_comm_result != COMM_SUCCESS:
-                print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
-            elif dxl_error != 0:
-                print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-            counter = counter + 1
-        return dxl_status
+    def qdot_from_profvel(self, qdot):
+        """
+        inverse of profvel_from_qdot
+        """
+        return qdot*VEL_UNIT/6
+    ###############################################################################
+    """
+    Other hardware specific methods
+    """
+    def allocate_conf(self, motor_id, vel, pos):
+        #Allocate velocity and position for all motors with relative Id specified in relId
+        # handles scalar case
+        if not(isinstance(motor_id, Iterable)): 
+            # se non è iterable lo si rende iterable
+            motor_id = [motor_id] 
+            vel = [vel]
+            pos = [pos]
 
+        #if goal position command is outside of the limits, go to the limit
+        for i in range(len(motor_id)):
+            if pos[i] > self.maxpos[motor_id[i]-1]:
+                pos[i] = self.maxpos[motor_id[i]-1]
+            if pos[i] < self.minpos[motor_id[i]-1]:
+                pos[i] = self.minpos[motor_id[i]-1]
+
+            # Allocate goal position value into byte array
+            param_goal = [DXL_LOBYTE(DXL_LOWORD(vel[i])), DXL_HIBYTE(DXL_LOWORD(vel[i])), DXL_LOBYTE(DXL_HIWORD(vel[i])), DXL_HIBYTE(DXL_HIWORD(vel[i])),\
+                            DXL_LOBYTE(DXL_LOWORD(pos[i])), DXL_HIBYTE(DXL_LOWORD(pos[i])), DXL_LOBYTE(DXL_HIWORD(pos[i])), DXL_HIBYTE(DXL_HIWORD(pos[i]))]
+            # Add goal value to the Syncwrite parameter storage
+            dxl_addparam_result = self.groupSyncWrite.addParam(motor_id[i], param_goal)
+            if dxl_addparam_result != True:
+                print("[ID:%03d] groupSyncWrite addparam failed" % motor_id[i])
+                quit()
+
+    def set_conf(self):
+        # Send packets in groupSyncWrite and clears it afterward
+        dxl_comm_result = self.groupSyncWrite.txPacket()
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+
+        # Clear syncwrite parameter storage
+        self.groupSyncWrite.clearParam()        
+    
     def reboot(self, motor_id):
         # Applies the  reboot procedure 
-        counter = 0
-        for i in motor_id:
-            dxl_comm_result, dxl_error = self.packetHandler.reboot(self.portHandler, i)
+        self.motor_lock.acquire()
+
+        for i in range(len(motor_id)):
+            dxl_comm_result, dxl_error = self.packetHandler.reboot(self.portHandler, motor_id[i])
             if dxl_comm_result != COMM_SUCCESS:
                 print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
             elif dxl_error != 0:
                 print("%s" % self.packetHandler.getRxPacketError(dxl_error))
-
-            counter = counter + 1
+        
+        self.motor_lock.release()

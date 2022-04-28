@@ -1,10 +1,11 @@
+# Author: Anna Astolfi
 from abc import ABC, abstractmethod
 
 
-class RobotOut(ABC):
+class RobotMotorControl(ABC):
     """
     This class represents the basic template which contains the necessary
-    methods to emit motor commands or to read sensors data. 
+    methods to emit motor commands. 
     """
 
     def __init__(self):
@@ -32,6 +33,14 @@ class RobotOut(ABC):
         pass
 
     @abstractmethod
+    def set_pos(self, motor_id, vel, pos):
+        """
+        command a position to the motor identified by motor_id to be reached and a velocity to reach it
+        NOTA: differenza tra simualtore e motori
+        """
+        pass
+
+    @abstractmethod
     def set_pos_limits(self, motor_id):
         """
         """
@@ -47,13 +56,7 @@ class RobotOut(ABC):
         """
         pass
 
-    @abstractmethod
-    def goto_pos(self, motor_id, vel, pos):
-        """
-        command a position to the motor identified by motor_id to be reached and a velocity to reach it
-        NOTA: differenza tra simualtore e motori
-        """
-        pass
+
 
 
     @abstractmethod
