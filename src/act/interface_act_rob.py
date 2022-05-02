@@ -11,6 +11,7 @@ old_settings = termios.tcgetattr(fd)
 
 from dynamixel_sdk import *    # Uses Dynamixel SDK library
 from .peripherals_def.dynamixel_communication.dynamixel_def import *     # Constant definitions
+from .locomotion.robot_def import *	# Constant definitions
 
 import time
 import numpy as np
@@ -32,7 +33,7 @@ class RealRobot(RobotMotorControl):
 
         self.motor_lock = threading.Lock()
         
-        self.motor_ids = range(1,len(motor_list)+1)
+        self.motor_ids = range(len(motor_list))
         #Data structures defined: 
         #   portHandler, 
         self.portHandler = PortHandler(DEVICENAME) # Initialize port handler
@@ -112,11 +113,11 @@ class RealRobot(RobotMotorControl):
     def torque_disable(self, motor_id):
         #Disable torque for relId motors. relId is an array with 1,2 or 3 elements
         # handles scalar case
-        if type(ids)==np.int32:
-            ids = np.array([ids],dtype="int")
+        if not isinstance(motor_id, Iterable):
+            motor_id = [motor_id]
              
         #perform routine on dynamixel
-        for i in ids:
+        for i in motor_id:
             dxl_comm_result, dxl_error = self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_PRO_TORQUE_ENABLE, TORQUE_DISABLE)
             if dxl_comm_result != COMM_SUCCESS:
                 print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))

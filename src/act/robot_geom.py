@@ -1,18 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Author: Giacomo Picardi
+# Author: Anna Astolfi
 
 from __future__ import division
-import sys, os
+from itertools import product
+from scipy.spatial import Delaunay
+from scipy.linalg import svd
+
+import math
 import numpy as np
+import os, sys
+import time
+import transforms3d.euler as eul
+
 from .interface_act_sim import SimRobot
 from .interface_act_rob import RealRobot
 from .locomotion.robot_def import *	# Constant definitions
-import time
-import math
-from scipy.spatial import Delaunay
-from scipy.linalg import svd
-import transforms3d.euler as eul
+
 
 fileDir = os.path.dirname(os.path.abspath(__file__))
 parentDir = os.path.dirname(fileDir)
@@ -21,7 +25,7 @@ path.append(parentDir)
 
 class RobotGeom():
         def __init__(self, 
-                    leg_num = 1, 
+                    leg_num = 1, # 1 because only manipulator
                     leg_joints = 3, 
                     limits_file='/locomotion/trajectories/limits.txt', 
                     init_pose = 'folded', 
@@ -29,8 +33,8 @@ class RobotGeom():
                 
                 # check if the output device is admissible
                 if outputDevice == "Sim":
-                    self.inOutFnct = SimRobot()
-                elif outputDevice == "Hard":
+                    self.inOutFnct = SimRobot(motor_list=["motor0", "motor1", "motor2"])
+                elif outputDevice == "Real":
                     self.inOutFnct = RealRobot()
                 else:
                     print("None of admitted output devices. Picking the default one -> Webots ")
@@ -41,10 +45,10 @@ class RobotGeom():
                 self.leg_joints = leg_joints	        #Number of joints in a leg
                 self.joint_num = leg_num*leg_joints     #Number of joints in the robot
                 
-                self.l0 = 8 				#Lengths of leg segments in cm
+                self.l0 = 2.5 				#Lengths of leg segments in cm
                 self.l1 = 7
-                self.l2 = 30
-                self.l3 = 32.3 	#26 without foot
+                self.l2 = 32
+                self.l3 = 25 	
                 
                 self.body_length = 40			#Dimensions of body in cm
                 self.body_width = 55
@@ -53,99 +57,113 @@ class RobotGeom():
                 self.q_min = np.zeros(3)
                 self.q_max = np.zeros(3)
                 for i in range(self.leg_joints):
-                        self.q_min[i], self.q_max[i] = self.inOutFnct.get_pos_limits(i+1) #np.array([-np.pi/2, -np.pi/2, -np.pi/4])
-                                                                                        #self.q_max = np.array([np.pi/2, np.pi/2, 3/4*np.pi])
+                        self.q_min[i], self.q_max[i] = self.inOutFnct.get_pos_limits(i) #np.array([-np.pi/2, -np.pi/2, -np.pi/4])
+                        print(i, self.q_min[i])                                                               #self.q_max = np.array([np.pi/2, np.pi/2, 3/4*np.pi])
 
                 # Modern Robotics approach requirements: 
                 #   Mhome configurations (position of end effector when all joint are at 0 position) 4x4 matrix
+                """
+                # joint pos in home RF
+                P_kb = [0; -0.5; 0]; 
+                P_fk = [0; -0.5; 0]; 
+                #home matrices;
+                M_k = eye(4); M_k(1:3, end) = P_kb;
+                M_f = eye(4); M_f(1:3, end) = P_kb+P_fk;
+                """
+                self.home_matrices= np.zeros(shape=(self.leg_num,16))
+                for i in range(self.leg_num):
+                        R_i = np.reshape(np.eye(4), (1,16))
+                        self.home_matrices[i,:] = R_i
+                        self.home_matrices[i, -2] = self.l0+self.l1+self.l2+self.l3
+                
                 #   Sn = (ωn, vn) is the screw axis of joint n as expressed in the fixed base frame 6x1
-                
-                #Position of leg frames within the base frame.
-                self.leg_frame_b = np.zeros([self.leg_num,3])
-                self.leg_frame_b[0,:] = np.array([self.body_length/2, self.body_width/2, 0])
-                self.leg_frame_b[1,:] = np.array([self.body_length/2, 0,0])
-                self.leg_frame_b[2,:] = np.array([self.body_length/2, -self.body_width/2,0])
-                self.leg_frame_b[3,:] = np.array([-self.body_length/2, self.body_width/2,0])
-                self.leg_frame_b[4,:] = np.array([-self.body_length/2, 0,0])
-                self.leg_frame_b[5,:] = np.array([-self.body_length/2, -self.body_width/2,0])
-                #Leg frames and joints management.
-                self.mir = np.array([1, 1, -1, -1, -1, 1])
-                self.l_pos = np.array([1, 1, -1, 1, 1, -1])
-                self.sign = np.array([-1, -1, 1, -1, -1, 1, -1, 1, -1, -1, 1, -1, -1, 1, -1, -1, -1, 1])
-                
-                #coxa joint rest position in deg.
-                
-                #self.rest_coxa_angle = np.zeros(6) #mrudul coxa 0, erase after experiments
-                self.rest_coxa_angle = np.array([45, 0, -45, -45, 0, 45])*np.pi/180
-                self.rest_coxa_angle_rot = np.array([60, 0, -60, -60, 0, 60])*np.pi/180
+                omega = np.array([[0,1,0], [0, 0, 1], [0,0,1]])
+                pos_joints = np.array([[0, self.l0, 0], [0, self.l0+self.l1, 0], [0,self.l0+self.l1+self.l2,0]])
+                self.screw_axis = np.zeros([6,self.joint_num])    
+                for i in range(self.joint_num):
+                        self.screw_axis[0:3,i] = np.transpose(omega[i])
+                        self.screw_axis[3:6,i] = np.cross(-np.transpose(omega[i]), np.transpose(pos_joints[i]))
+
                 #Create point cloud of leg workspace for admissibility test.
                 nsample = 11
                 self.cloud = np.zeros([nsample**3,3])
+                
                 c = 0
                 q1 = np.linspace(self.q_min[0], self.q_max[0], nsample)
                 q2 = np.linspace(self.q_min[1], self.q_max[1], nsample)
                 q3 = np.linspace(self.q_min[2], self.q_max[2], nsample)
+                
                 for i in range(0,nsample):
                         for j in range(0,nsample):
                                 for k in range(0,nsample):
-                                        self.cloud[c,:] = self.kine([q1[i], q2[j], q3[k]],1) #patch rapida. Checko le gambe 3,4,5 sul workspace delle 1,2,6
-                                        c = c+1
-                self.Q_cur = np.zeros(self.leg_joints*self.leg_num)
-                self.robot_angles_and_status = rospy.Publisher('robot_angles_and_status', PhantomVisualization, queue_size=10)
+                                        self.cloud[c,:] = self.forward_kinematics([q1[i], q2[j], q3[k]],leg_id=0) #patch rapida. Checko le gambe 3,4,5 sul workspace delle 1,2,6
+                                        c = c+1                
+                self.saved_poses = {
+                        "extended": np.zeros(self.joint_num),
+                        "folded": self.q_min,
+                        "low_torque": self.q_min,
+                        }
+                self.saved_velocities = {
+                        "slow": np.ones(self.joint_num),
+                        "medium": 5*np.ones(self.joint_num),
+                        "fast": 10*np.ones(self.joint_num),
+                } #rad/s
+
+                self.init_pose = self.saved_poses[init_pose]
+                print("init pose: ", self.init_pose)
                 time.sleep(1)
-                #Generate a joint matrix: 0 corresponds to motor disable, 1 to motor enable.
-                """
-                if manipulator == 0:
-                        self.joints_status = np.zeros(self.leg_joints*self.leg_num)
-                        self.motor_ids = np.arange(1,self.leg_joints*self.leg_num+1)
-                else:
-                        self.joints_status = np.zeros(self.leg_joints*self.leg_num+1)
-                        self.motor_ids = np.arange(1,self.leg_joints*self.leg_num+2)
-                """
                 
                 print("Successfully created a robot with %d legs" %self.leg_num)
                 # Goto pose just after creation
-                self.goto_pose("medium",init_pose)
+                self.goto_pose(self.saved_velocities["medium"],self.init_pose)
 
                 
         def __del__(self):
-                self.goto_pose("slow","low_torque") #to be used while outside water
-                raw_input("Press ENTER to terminate")
-                self.torque_disable(self.motor_ids)
+                self.goto_pose(self.saved_velocities["slow"],self.saved_poses["low_torque"]) #to be used while outside water
+                #python2
+                #raw_input("Press ENTER to terminate")
+                #python3
+                input("Press ENTER to terminate")
+                self.inOutFnct.torque_disable(range(self.joint_num))
 
-        def torque_enable(self, motor_ids):
-                self.joints_status[motor_ids-1] = 1
-                if self.phantom == 0:
-                        self.motor_lock.acquire()
-                        self.motorHandler.torque_enable(motor_ids)
-                        self.motor_lock.release()
-
-        def torque_disable(self, motor_ids):
-                self.joints_status[motor_ids-1] = 0
-                if self.phantom == 0:
-                        #self.motorHandler.torque_disable(ALL) #what about 'motor_ids' as input variable?
-                        self.motorHandler.torque_disable(motor_ids)
-                        
-        def kine_coxa_plane(self, q):
-                #q = [q1, q2]: joint coords of femur  and  tibia  joints in [rad]
-                #p = [x_p, z_p]: foot tip position (2D) in the coxa plane  [cm]
-                q2 = q[0]
-                q3 = q[1]
-
-                x_p = self.l0 + self.l2*np.cos(q2) + self.l3*np.cos(q2-q3)
-                z_p = -self.l2*np.sin(q2) - self.l3*np.sin(q2-q3)
-
-                return np.array([x_p, z_p])
-
-        def kine(self, q, leg_id):  #updated 21/5/2020 to discriminate kinematics between legs 1,2,6 and 3,4,5
-                q1 = q[0]
-                q2 = q[1]
-                q3 = q[2]
-
-                x = (self.l0 + self.l2*np.cos(q2) + self.l3*np.cos(q2-q3))*np.cos(q1) - self.mir[leg_id]*self.l1*np.sin(q1)
-                y = (self.l0 + self.l2*np.cos(q2) + self.l3*np.cos(q2-q3))*np.sin(q1) + self.mir[leg_id]*self.l1*np.cos(q1)
-                z = self.l2*np.sin(q2) + self.l3*np.sin(q2-q3)
-
+        def product_of_exponentials(self, screw_axis, displacement):
+                """
+                Exponential coordinates of a homegeneous tranformation
+                [screw_axis]*displacement in se(3) -> T in SE(3)
+                Displacement: distance to be traveled along the screw axis to take the frame
+                from the origin I to T
+                if norm(omega) ==1, the displacement is the angle of rotation about the screw axis
+                is omega==0 and norm(v) ==1 then the displacement is a linear distance along the
+                screw axis
+                """
+                omega = screw_axis[0:3]
+                omega_skew = np.reshape(np.array([0, -omega[2], omega[1],       \
+                                                omega[2], 0, -omega[0],         \
+                                                -omega[1],omega[0], 0]),[3,3])
+                v = screw_axis[3:6]
+                th = displacement
+                G= np.eye(3)*th+ (1-np.cos(th))*omega_skew+(th-np.sin(th))*omega_skew**2
+                Gv = np.reshape(G.dot(v), (3,1))
+                C =self.exponential_coordinate_representation(omega_skew, th)
+                HT = np.hstack((C, Gv))
+                homogeneous_transformation = np.vstack((HT, np.array([0,0,0,1])))
+                
+                return homogeneous_transformation
+        
+        def exponential_coordinate_representation(self, skew_matrix, displacement):
+                C = np.eye(3)+np.sin(displacement)*skew_matrix+(1-np.cos(displacement))*skew_matrix**2
+                return C
+        
+        def forward_kinematics(self, q, leg_id=0, to_joint=2, from_joint=0):
+                home_matrix = np.transpose(np.reshape(self.home_matrices[leg_id], [4,4]))
+                product = np.eye(4)
+                for i in range(to_joint, from_joint, -1):
+                        # A*B*C = (A*B)*C = A*(B*C) proprietà associativa prodotto tra matrici
+                        product *= self.product_of_exponentials(screw_axis=self.screw_axis[:,i], displacement= q[i])
+                T = product * home_matrix
+                x = T[0,3]
+                y = T[1,3]
+                z = T[2,3]
                 return np.array([x, y, z])
 
         def leg_inv_kine_coxa_plane(self, p):
@@ -157,7 +175,7 @@ class RobotGeom():
                 a = math.sqrt(x_p**2+z_p**2)
                 q2 = math.acos((self.l2**2+a**2-self.l3**2)/(2*self.l2*a)) + math.atan2(z_p,x_p);
                 q3 = math.pi - math.acos((self.l2**2+self.l3**2-a**2)/(2*self.l2*self.l3));
-                return np.array([q2, q3]);
+                return np.array([q2, q3])
 
 
         def leg_inv_kine(self, tip_pos, leg_id):
@@ -186,52 +204,7 @@ class RobotGeom():
                     return test
                 else:
                     return all(test)
-        
-        def crabFootPath(self, leg_id, Qc,numPts, Ax,Ay,f,Cx,Cy,phi_X, phi_Y, Rotation,stretchXY, stretchAmount):
-                t= np.linspace(0,1/f, numPts) # 1 periodo
-                Q = np.zeros((3, numPts))
-                Q[0,:] = Qc
-                Qdot = np.zeros((3, numPts))
-                X = Cx+Ax*np.cos(t+phi_X)
-                Y = Cy+Ay*np.cos(t+phi_Y)                        
-                XY = np.vstack((X,Y))
-                if stretchAmount != 1:
-                        XY = self.set_stretching(XY,stretchXY, stretchAmount) # (2,npoints)
-                XY = np.transpose(np.dot(np.transpose(XY), Rotation))
-                admiss = (np.amax(np.sqrt(np.sum(XY**2, 0))) <= self.l2+self.l3)#self.admissible(XY)
-                if admiss:
-                    for i in range(numPts):
-                        qaux = self.leg_inv_kine_coxa_plane((XY[:,i]))
-                        Q[1,i] = qaux[0]
-                        Q[2,i] = qaux[1]
-                    delta_t = 1/(f*numPts)
-                    Qdot[:,0] = Q[:,numPts-1]-Q[:,0]
-                    Qdot[:,1:numPts] = np.abs(np.diff(Q[:,0:numPts])/delta_t)
-                else:
-                    print('non admissible trj for leg_id: '+ str(leg_id))
-
-                return XY, Q, Qdot, admiss
-
-        def set_stretching(self, trj,stretchXY, stretchAmount):
-                try:
-                        U,_ , _ = svd(trj)
-                except:
-                        print('decomposition error')
-                theta = -np.arctan2(U[1][0], U[0][0])
-                TransfMat = np.array([[np.cos(theta), np.sin(theta)],[-np.sin(theta), np.cos(theta)]])
-                XpYp = np.transpose(np.dot(np.transpose(trj),TransfMat))
-                if stretchXY== 'x' or stretchXY== 'X':
-                        print('stretching x')
-                        stretchingMat = np.array([[stretchAmount, 0],[0,1]])
-                elif stretchXY =='y' or stretchXY =='Y' :
-                        stretchingMat = np.array([[1, 0],[0,stretchAmount]])
-                else:
-                        print('error: non existing axis')
-                XsYs = np.transpose(np.dot(stretchingMat,XpYp))
-                XfYf = np.transpose(np.dot(XsYs, np.transpose(TransfMat)))
-
-                return XfYf
-        
+                
         def cartesian2joint_traj(self, T, dT):
                 """
                 Traduzione di una traiettoria T = [x,y,z](t) Nx3 (with N time frames, and 3 coordinate end effectors)
@@ -332,39 +305,6 @@ class RobotGeom():
                 #leg_id=1--->[data[1], data[2], data[3]]
                 return data[self.leg_joints*(leg_id-1):self.leg_joints*(leg_id-1)+self.leg_joints]
 
-        def d_from_q(self, motor_ids, q):
-                #q: joint coordinate in [deg]
-                #d: converts q to goal position command of dynamixel
-                #it requires the zero calibrated (or passed) in the contructor and motor id
-                try: #handles case of single motor
-                        d = np.zeros(len(motor_ids), dtype = 'int')
-                except:
-                        d = self.sign[motor_ids-1]*q/POS_UNIT+self.zeros[motor_ids-1]
-                        return d
-                current = 0
-                for i in motor_ids:
-                        d[current] = self.sign[i-1]*q[current]/POS_UNIT+self.zeros[i-1]
-                        current = current+1
-                return d
-
-        def q_from_d(self, motor_ids, d):
-                #inverse of d_from_q
-                q = np.zeros(len(motor_ids))
-                current = 0
-                for i in motor_ids:
-                        q[current] = self.sign[i-1]*(d[current] - self.zeros[i-1])*POS_UNIT
-                        current = current+1
-                return q
-
-        def profvel_from_qdot(self, qdot):
-                #converts joint velocity qdot in deg/s to profvel motor command
-                profvel =  qdot*6/VEL_UNIT
-                return profvel.astype(int)
-
-        def qdot_from_profvel(self, qdot):
-                #inverse of profvel_from_qdot
-                return qdot*VEL_UNIT/6
-
         def foot_tip_positioning(self, vel, tip_pos, leg):
                 #Control the foot tip of specified leg to go to tip_pos with specified vel.
                 joint_ids = self.get_leg_slice(self.motor_ids,leg)
@@ -395,20 +335,14 @@ class RobotGeom():
                         self.motor_lock.release()
 
         def goto_pose(self, vel, pose):
-                for i in range(1,self.leg_num+1):
-                        joint_ids = self.get_leg_slice(self.motor_ids,i)
-                        joint_vel = self.profvel_from_qdot(self.get_leg_slice(static_poses_vel[vel],i))
-                        joint_pos = self.d_from_q(joint_ids,self.get_leg_slice(static_poses_pos[pose],i))
-                        
-                        self.Q_cur[3*(i-1):3*(i-1)+3] = np.radians(self.get_leg_slice(static_poses_pos[pose],i))
-                        self.robot_angles_and_status.publish(list(self.Q_cur),list(self.joints_status))
-
-                        if self.phantom == 0:
-                                self.motor_lock.acquire()
-                                self.motorHandler.allocate_conf(joint_ids, joint_vel, joint_pos)
-                                self.motorHandler.set_conf()
-                                self.motor_lock.release()
-                        
+                for i in range(self.leg_num):
+                        for j in range(self.joint_num):
+                                print("pos: ", pose[j])
+                                print("vel: ", vel[j])
+                                self.inOutFnct.set_pos(j,vel[j], pose[j])
+                                #self.Q_cur[3*(i-1):3*(i-1)+3] = np.radians(self.get_leg_slice(static_poses_pos[pose],i))
+                                #self.robot_angles_and_status.publish(list(self.Q_cur),list(self.joints_status))
+                                
         def change_configuration(self, nq):
             nq = nq*np.pi/180
             oq = self.get_pose(np.arange(0,18))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Author: Giacomo Picardi
+# Author: Anna Astolfi
 
 import numpy as np
 from .robot_geom import RobotGeom
