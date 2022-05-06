@@ -13,9 +13,7 @@ import os, sys
 import time
 import transforms3d.euler as eul
 
-from .interface_act_sim import SimRobot
-from .interface_act_rob import RealRobot
-from .locomotion.robot_def import *	# Constant definitions
+#from .robot_def import *	# Constant definitions
 
 
 fileDir = os.path.dirname(os.path.abspath(__file__))
@@ -27,19 +25,9 @@ class RobotGeom():
         def __init__(self, 
                     leg_num = 1, # 1 because only manipulator
                     leg_joints = 3, 
-                    limits_file='/locomotion/trajectories/limits.txt', 
-                    init_pose = 'folded', 
-                    outputDevice = "Sim"): #manipulator input(?)
+                    joint_limits = "/home/anna/catkin_ws/src/silver3/src/act/trajectories/limits.txt",
+                    init_pose = 'folded'): #manipulator input(?)
                 
-                # check if the output device is admissible
-                if outputDevice == "Sim":
-                    self.inOutFnct = SimRobot(motor_list=["motor0", "motor1", "motor2"])
-                elif outputDevice == "Real":
-                    self.inOutFnct = RealRobot()
-                else:
-                    print("None of admitted output devices. Picking the default one -> Webots ")
-                    self.inOutFnct = SimRobot()
-
                 #Structural characteristics of the robot.
                 self.leg_num = leg_num			#Number of legs
                 self.leg_joints = leg_joints	        #Number of joints in a leg
@@ -54,22 +42,20 @@ class RobotGeom():
                 self.body_width = 55
                 
                 #[min,max] range of joints positioning in rad.
-                self.q_min = np.zeros(3)
-                self.q_max = np.zeros(3)
-                for i in range(self.leg_joints):
-                        self.q_min[i], self.q_max[i] = self.inOutFnct.get_pos_limits(i) #np.array([-np.pi/2, -np.pi/2, -np.pi/4])
-                        print(i, self.q_min[i])                                                               #self.q_max = np.array([np.pi/2, np.pi/2, 3/4*np.pi])
-
+                self.q_min = np.zeros(self.joint_num)
+                self.q_max = np.zeros(self.joint_num)
+                #read from txt file
+                with open(joint_limits,"r") as f:
+                        counter = 0
+                        for line in f:
+                                fields = line.split(";")
+                                #self.zeros[counter] = fields[0]
+                                self.q_min[counter] = fields[1]
+                                self.q_max[counter] = fields[2]
+                                counter = counter + 1
                 # Modern Robotics approach requirements: 
                 #   Mhome configurations (position of end effector when all joint are at 0 position) 4x4 matrix
-                """
-                # joint pos in home RF
-                P_kb = [0; -0.5; 0]; 
-                P_fk = [0; -0.5; 0]; 
-                #home matrices;
-                M_k = eye(4); M_k(1:3, end) = P_kb;
-                M_f = eye(4); M_f(1:3, end) = P_kb+P_fk;
-                """
+
                 self.home_matrices= np.zeros(shape=(self.leg_num,16))
                 for i in range(self.leg_num):
                         R_i = np.reshape(np.eye(4), (1,16))
@@ -113,18 +99,6 @@ class RobotGeom():
                 print("init pose: ", self.init_pose)
                 time.sleep(1)
                 
-                print("Successfully created a robot with %d legs" %self.leg_num)
-                # Goto pose just after creation
-                self.goto_pose(self.saved_velocities["medium"],self.init_pose)
-
-                
-        def __del__(self):
-                self.goto_pose(self.saved_velocities["slow"],self.saved_poses["low_torque"]) #to be used while outside water
-                #python2
-                #raw_input("Press ENTER to terminate")
-                #python3
-                input("Press ENTER to terminate")
-                self.inOutFnct.torque_disable(range(self.joint_num))
 
         def product_of_exponentials(self, screw_axis, displacement):
                 """
@@ -196,7 +170,7 @@ class RobotGeom():
                 q = np.array([q1, q2, q3]);
                 return q
 
-        def admissible(self, T):
+        def admissible_cart_space(self, T):
                 if not isinstance(self.cloud,Delaunay):
                         ws = Delaunay(self.cloud)
                         test = ws.find_simplex(T)>=0
@@ -204,6 +178,17 @@ class RobotGeom():
                     return test
                 else:
                     return all(test)
+        
+        def admissible_joint_space(self, Q):
+                for i in range(3):
+                        for j in range(len(Q)):
+                                if Q[i,j]< self.q_min[i]:
+                                        return False
+                                elif Q[i,j] > self.q_max[i]:
+                                        return False
+                return True
+                                        
+
                 
         def cartesian2joint_traj(self, T, dT):
                 """
@@ -305,43 +290,6 @@ class RobotGeom():
                 #leg_id=1--->[data[1], data[2], data[3]]
                 return data[self.leg_joints*(leg_id-1):self.leg_joints*(leg_id-1)+self.leg_joints]
 
-        def foot_tip_positioning(self, vel, tip_pos, leg):
-                #Control the foot tip of specified leg to go to tip_pos with specified vel.
-                joint_ids = self.get_leg_slice(self.motor_ids,leg)
-                joint_vel = self.profvel_from_qdot(self.get_leg_slice(static_poses_vel[vel],leg))
-                q = self.leg_inv_kine(tip_pos, leg)*180/math.pi
-                joint_pos = self.d_from_q(joint_ids,q)
-                
-                self.Q_cur[3*(leg-1):3*(leg-1)+3] = np.radians(q)
-                self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
-                if self.phantom == 0:
-                        self.motor_lock.acquire()
-                        self.motorHandler.allocate_conf(joint_ids, joint_vel, joint_pos)
-                        self.motorHandler.set_conf()
-                        self.motor_lock.release()
-
-        def leg_joints_positioning(self, vel, q, leg):
-                #Control the joint angles of specified leg to go to q (deg) with specified vel.
-                joint_ids = self.get_leg_slice(self.motor_ids,leg)
-                joint_vel = self.profvel_from_qdot(self.get_leg_slice(static_poses_vel[vel],leg))
-                joint_pos = self.d_from_q(joint_ids,q)
-
-                self.Q_cur[3*(leg-1):3*(leg-1)+3] = np.radians(q)
-                self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
-                if self.phantom == 0:
-                        self.motor_lock.acquire()
-                        self.motorHandler.allocate_conf(joint_ids, joint_vel, joint_pos)
-                        self.motorHandler.set_conf()
-                        self.motor_lock.release()
-
-        def goto_pose(self, vel, pose):
-                for i in range(self.leg_num):
-                        for j in range(self.joint_num):
-                                print("pos: ", pose[j])
-                                print("vel: ", vel[j])
-                                self.inOutFnct.set_pos(j,vel[j], pose[j])
-                                #self.Q_cur[3*(i-1):3*(i-1)+3] = np.radians(self.get_leg_slice(static_poses_pos[pose],i))
-                                #self.robot_angles_and_status.publish(list(self.Q_cur),list(self.joints_status))
                                 
         def change_configuration(self, nq):
             nq = nq*np.pi/180
@@ -466,76 +414,12 @@ class RobotGeom():
                                 self.motor_lock.acquire()
                                 self.motorHandler.allocate_conf(self.motor_ids[c*3:c*3+3:1], joint_vel[c*3:c*3+3:1], joint_pos[c*3:c*3+3:1])
                                 self.motorHandler.set_conf()
-                                self.motor_lock.release()
-                                        
-        def push(self, leg_ids, joint_vel, q_femur, q_tibia, underactuated):
-                #q_femur, q_tibia [deg] - final position, array of length = length(leg_ids)
-                #joint_vel [digit] - angular velocity of joints, array of length = length(leg_ids)
-                #underactuated [binary] - if 1 femur off
-                coxa_joint_ids = leg_ids*3-2
-                femur_joint_ids = leg_ids*3-1
-                tibia_joint_ids = leg_ids*3
-                print(self.phantom)
-                for i in np.arange(0,len(leg_ids)): 
-                        if self.phantom == 0: # sending motor commands to robot
-                                self.motor_lock.acquire()
-                                if underactuated:
-                                        #print('switching off motors', femur_joint_ids[i])
-                                        self.torque_disable(femur_joint_ids[i]) #the disable function manages the phantom case automatically
-                                self.motorHandler.allocate_conf(femur_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(femur_joint_ids[i], q_femur[leg_ids[i]-1]))
-                                self.motorHandler.allocate_conf(tibia_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(tibia_joint_ids[i], q_tibia[leg_ids[i]-1]))
-                                self.motorHandler.set_conf()
-                                self.motor_lock.release()
-
-                        # PHANTOM : set active joints status to 1
-                        self.joints_status[coxa_joint_ids[i]-1]=1
-                        self.joints_status[tibia_joint_ids[i]-1]=1
-                        # PHANTOM : set motor angles 
-                        self.Q_cur[femur_joint_ids[i]-1] = np.radians(q_femur[leg_ids[i]-1]) #ignored if status ==0
-                        self.Q_cur[tibia_joint_ids[i]-1] = np.radians(q_tibia[leg_ids[i]-1])
-                        self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
-                      
-
-        def pull(self, leg_ids, joint_vel, q_coxa, q_femur, q_tibia, underactuated):
-                #q_femur, q_tibia, q_coxa [deg] - final position, array of length = length(leg_ids)
-                #joint_vel [digit] - angular velocity of joints, array of length = length(leg_ids)
-                # during pull there is the previously active tripod becoming idle and the other one preparing for landing
-                coxa_joint_ids = leg_ids*3-2
-                femur_joint_ids = leg_ids*3-1
-                tibia_joint_ids = leg_ids*3
-
-                for i in np.arange(0,len(leg_ids)): #: np.array([3,6])-1 per prove banco
-                        if underactuated: # se fully actuted non succede nulla perchè è già tutto acceso
-                                self.torque_enable(femur_joint_ids[i])
-                                #print('switching on motors', femur_joint_ids[i])
-                        if self.phantom == 0:
-                                self.motor_lock.acquire()
-                                self.motorHandler.allocate_conf(femur_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(femur_joint_ids[i], q_femur[leg_ids[i]-1]))
-                                self.motorHandler.allocate_conf(tibia_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(tibia_joint_ids[i], q_tibia[leg_ids[i]-1]))
-                                self.motorHandler.allocate_conf(coxa_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(coxa_joint_ids[i], q_coxa[leg_ids[i]-1]))
-                                self.motorHandler.set_conf()
-                                self.motor_lock.release()
-                        # PHANTOM: set motor angles (DONE ANYWAY)
-                        self.Q_cur[femur_joint_ids[i]-1] = np.radians(q_femur[leg_ids[i]-1])
-                        self.Q_cur[tibia_joint_ids[i]-1] = np.radians(q_tibia[leg_ids[i]-1])
-                        self.Q_cur[coxa_joint_ids[i]-1] = np.radians(q_coxa[leg_ids[i]-1])
-                        self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
-                        
-        def set_coxa(self, leg_ids, joint_vel, joint_pos):
-                #..._joint_vel [digit]
-                #..._joint_pos [deg]
-                #SET COXA ACTION: set coxa joint at joint_pos position with joint_vel velocity
-                joint_ids = leg_ids*3-2
-                self.Q_cur[joint_ids-1] = np.radians(joint_pos)
-                self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
-                if self.phantom == 0:
-                        self.motor_lock.acquire()
-                        self.motorHandler.allocate_conf(joint_ids, joint_vel, self.d_from_q(joint_ids, joint_pos))
-                        #set positions previously allocated
-                        self.motorHandler.set_conf()
-                        self.motor_lock.release()
+                                self.motor_lock.release()                            
 
         def ik_stewart(self, displacement, orientation, F_b):
+                """
+                To be re-implemented when introducing multiple legs
+                """
                 rotation = eul.euler2mat(orientation[0],orientation[1],orientation[2],axes='szyx')
                 #Anchor points of legs in the base frame
                 A_b = np.tile(displacement,self.leg_num) + np.reshape(rotation.dot(self.leg_frame_b.T).T,18) 
@@ -546,9 +430,4 @@ class RobotGeom():
                 F_l[1,self.leg_num//2:self.leg_num + 1] = -F_l[1,self.leg_num//2:self.leg_num + 1]
                 return F_l.T
 
-        def manipulate(self, vel, pos):
-                self.motor_lock.acquire()
-                self.motorHandler.allocate_conf([19], vel, pos)
-                #set positions previously allocated
-                self.motorHandler.set_conf()
-                self.motor_lock.release()
+

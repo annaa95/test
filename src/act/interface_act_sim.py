@@ -76,7 +76,8 @@ class SimRobot(RobotMotorControl):
         t0 = self.wbfnct.getTime()
         while self.wbfnct.getTime()-t0< 2:
             self.motor[motor_id].setPosition(pos)
-            self.motor[motor_id].setVelocity(vel)
+            
+            self.motor[motor_id].setVelocity(abs(vel))
             if np.abs(self.get_pos(motor_id)-pos)< 1e-2:
                 print("Position reached with accuracy 1e-2 rad at time ", self.wbfnct.getTime())
                 break

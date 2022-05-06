@@ -1,46 +1,37 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # Author: Anna Astolfi
-#
+
+from turtle import shape
 import numpy as np
-import sys
-#sys.path.insert(1, '/home/anna/catkin_ws/src/silver3/src/act')
 from .robot_geom import RobotGeom
-from .interface_act_sim import SimRobot
-from .interface_act_rob import RealRobot
+
+
+Q_idle = np.array([45,50,130,0,50,130,-45,50,130,-45,50,130,0,50,130,45,50,130]) #dragon position to idle
+Q_idleH = np.array([45,0,90,0,0,90,-45,0,90,-45,0,90,0,0,90,45,0,90]) #dragon position to idle
+#Q_idle = np.array([45,-75,0, 0,-75,0, -45,-75,0, -45,-75,0, 0,-75,0, 45,-75,0]) #low torque to idle
+Q1 = np.array([45,30,120, 0,30,120, -45,30,120, -45,30,120, 0,30,120, 45,30,120]) #MC testing: pushing from dragon
+Q2 = np.array([45,-20,70, 0,-20,70, -45,-20,70, -45,-20,70, 0,-20,70, 45,-20,70]) #MC testing: pushing from dragon
+V0 = 30*np.ones([18], dtype='int')
+Vslow = 1*np.ones([18], dtype='int')
+dT = 2.5
+
 
 class RobotAction():
 
-    def __init__(self, 
-                outputDevice = "Sim"):
-        #manipulator input(?)
-        
-        # check if the output device is admissible
-        if outputDevice == "Sim":
-            self.inOutFnct = SimRobot(motor_list=["motor0", "motor1", "motor2"])
-        elif outputDevice == "Real":
-            self.inOutFnct = RealRobot()
-        else:
-            print("None of admitted output devices. Picking the default one -> Webots ")
-            self.inOutFnct = SimRobot()
-        # init robot                                          
+    def __init__(self):
 
+        # init robot
+        N=6
         self.robot = RobotGeom()
         print("Successfully created a robot with %d legs" %self.robot.leg_num)
         # Goto pose just after creation
         self.goto_pose(self.robot.saved_velocities["medium"],self.robot.init_pose)       
     
-    def __del__(self):
-        #self.goto_pose(self.saved_velocities["slow"],self.saved_poses["low_torque"]) #to be used while outside water
-        #python2
-        #raw_input("Press ENTER to terminate")
-        #python3
-        input("Press ENTER to terminate")  
-
     def read_encoders(self):
         encoder_values = []
         for i in range(self.robot.joint_num):
-            encoder_values.append(self.inOutFnct.get_pos(i))
+            encoder_values.append(self.robot.inOutFnct.get_pos(i))
         return encoder_values
 
     def goto_pose(self, vel, pose):
@@ -51,7 +42,7 @@ class RobotAction():
                     for j in range(self.robot.joint_num):
                             print("pos: ", pose[j])
                             print("vel: ", vel[j])
-                            self.inOutFnct.set_pos(j,vel[j], pose[j])
+                            self.robot.inOutFnct.set_pos(j,vel[j], pose[j])
 
     def generate_trj(self, n_pt = 120, Qi= None, Qf = None):
         """
@@ -182,56 +173,7 @@ class RobotAction():
             else:
                 print("non admissible trajectories in transition")
                 return False
-    def push(self, leg_ids, joint_vel, q_femur, q_tibia, underactuated):
-                #q_femur, q_tibia [deg] - final position, array of length = length(leg_ids)
-                #joint_vel [digit] - angular velocity of joints, array of length = length(leg_ids)
-                #underactuated [binary] - if 1 femur off
-                coxa_joint_ids = leg_ids*3-2
-                femur_joint_ids = leg_ids*3-1
-                tibia_joint_ids = leg_ids*3
-                print(self.phantom)
-                for i in np.arange(0,len(leg_ids)): 
-                        if self.phantom == 0: # sending motor commands to robot
-                                self.motor_lock.acquire()
-                                if underactuated:
-                                        #print('switching off motors', femur_joint_ids[i])
-                                        self.torque_disable(femur_joint_ids[i]) #the disable function manages the phantom case automatically
-                                self.motorHandler.allocate_conf(femur_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(femur_joint_ids[i], q_femur[leg_ids[i]-1]))
-                                self.motorHandler.allocate_conf(tibia_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(tibia_joint_ids[i], q_tibia[leg_ids[i]-1]))
-                                self.motorHandler.set_conf()
-                                self.motor_lock.release()
 
-                        # PHANTOM : set active joints status to 1
-                        self.joints_status[coxa_joint_ids[i]-1]=1
-                        self.joints_status[tibia_joint_ids[i]-1]=1
-                        # PHANTOM : set motor angles 
-                        self.Q_cur[femur_joint_ids[i]-1] = np.radians(q_femur[leg_ids[i]-1]) #ignored if status ==0
-                        self.Q_cur[tibia_joint_ids[i]-1] = np.radians(q_tibia[leg_ids[i]-1])
-                        self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
-    def pull(self, leg_ids, joint_vel, q_coxa, q_femur, q_tibia, underactuated):
-        #q_femur, q_tibia, q_coxa [deg] - final position, array of length = length(leg_ids)
-        #joint_vel [digit] - angular velocity of joints, array of length = length(leg_ids)
-        # during pull there is the previously active tripod becoming idle and the other one preparing for landing
-        coxa_joint_ids = leg_ids*3-2
-        femur_joint_ids = leg_ids*3-1
-        tibia_joint_ids = leg_ids*3
-
-        for i in np.arange(0,len(leg_ids)): #: np.array([3,6])-1 per prove banco
-                if underactuated: # se fully actuted non succede nulla perchè è già tutto acceso
-                        self.torque_enable(femur_joint_ids[i])
-                        #print('switching on motors', femur_joint_ids[i])
-                if self.phantom == 0:
-                        self.motor_lock.acquire()
-                        self.motorHandler.allocate_conf(femur_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(femur_joint_ids[i], q_femur[leg_ids[i]-1]))
-                        self.motorHandler.allocate_conf(tibia_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(tibia_joint_ids[i], q_tibia[leg_ids[i]-1]))
-                        self.motorHandler.allocate_conf(coxa_joint_ids[i], joint_vel[leg_ids[i]-1], self.d_from_q(coxa_joint_ids[i], q_coxa[leg_ids[i]-1]))
-                        self.motorHandler.set_conf()
-                        self.motor_lock.release()
-                # PHANTOM: set motor angles (DONE ANYWAY)
-                self.Q_cur[femur_joint_ids[i]-1] = np.radians(q_femur[leg_ids[i]-1])
-                self.Q_cur[tibia_joint_ids[i]-1] = np.radians(q_tibia[leg_ids[i]-1])
-                self.Q_cur[coxa_joint_ids[i]-1] = np.radians(q_coxa[leg_ids[i]-1])
-                self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
     def get_contacts(self, msg):
         self.contacts[0:3] = msg.data[3:6]
         self.contacts[3:6] = msg.data[0:3]

@@ -11,10 +11,12 @@ old_settings = termios.tcgetattr(fd)
 
 from dynamixel_sdk import *    # Uses Dynamixel SDK library
 from .peripherals_def.dynamixel_communication.dynamixel_def import *     # Constant definitions
-from .locomotion.robot_def import *	# Constant definitions
+#from .locomotion.robot_def import *	# Constant definitions
 
 import time
 import numpy as np
+POS_UNIT                    = 0.088             # (DEG) A rotation of 1 (motor command) is 0.088 deg
+VEL_UNIT                    = 0.229             # (RPM) A command of 1 in profile velocity is 0.229 rpm
 
 def getch():
     try:
