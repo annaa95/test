@@ -3,5 +3,6 @@
   <arg name="auto-close" default="false" doc="Startup mode"/>
   <env name="LD_LIBRARY_PATH" value="$(env LD_LIBRARY_PATH):$(env WEBOTS_HOME)/lib/controller"/>
   <env name="PYTHONPATH" value="$(env PYTHONPATH):$(env WEBOTS_HOME)/lib/controller/python36"/>
-  <node name="robot" pkg="silver3" type="robot_runner.py" required="$(arg auto-close)" output="screen"/>
+  <node name="motion_control_node" pkg="silver3" type="robot_actions_ros.py" required="$(arg auto-close)" output="screen"/>
+  <node name="ee_pose_node" pkg="silver3" type="pose_sense_ros.py" required="$(arg auto-close)" output="screen"/>
 </launch>

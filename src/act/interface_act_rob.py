@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from collections.abc import Iterable
 
-from .interface_act import RobotMotorControl
+from interface_act import RobotMotorControl
 
 import sys, tty, termios
 import threading
@@ -10,7 +10,7 @@ fd = sys.stdin.fileno()
 old_settings = termios.tcgetattr(fd)
 
 from dynamixel_sdk import *    # Uses Dynamixel SDK library
-from .peripherals_def.dynamixel_communication.dynamixel_def import *     # Constant definitions
+from peripherals_def.dynamixel_communication.dynamixel_def import *     # Constant definitions
 #from .locomotion.robot_def import *	# Constant definitions
 
 import time
@@ -93,6 +93,10 @@ class RealRobot(RobotMotorControl):
             if dxl_addparam_result != True:
                 print("[ID:%03d] groupSyncRead addparam failed" % i)
                 quit()
+    
+    def set_control_mode(self, motor_id, mode):
+        """ Torque disable, write on control mode ADDR la stringa, Toque enable"""
+        pass
 
     def torque_enable(self, motor_id):
         if type(ids)==np.int32:
@@ -323,3 +327,6 @@ class RealRobot(RobotMotorControl):
                 print("%s" % self.packetHandler.getRxPacketError(dxl_error))
         
         self.motor_lock.release()
+
+    def draw_trajectory(self):
+        pass

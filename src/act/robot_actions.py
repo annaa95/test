@@ -5,9 +5,9 @@
 import numpy as np
 import sys
 #sys.path.insert(1, '/home/anna/catkin_ws/src/silver3/src/act')
-from .robot_geom import RobotGeom
-from .interface_act_sim import SimRobot
-from .interface_act_rob import RealRobot
+from robot_geom import RobotGeom
+from interface_act_sim import SimRobot
+from interface_act_rob import RealRobot
 
 class RobotAction():
 
@@ -18,11 +18,15 @@ class RobotAction():
         # check if the output device is admissible
         if outputDevice == "Sim":
             self.inOutFnct = SimRobot(motor_list=["motor0", "motor1", "motor2"])
+            self.runwbt = False
         elif outputDevice == "Real":
             self.inOutFnct = RealRobot()
+            self.runwbt = True
         else:
             print("None of admitted output devices. Picking the default one -> Webots ")
             self.inOutFnct = SimRobot()
+            self.runwbt = False
+
         # init robot                                          
 
         self.robot = RobotGeom()
@@ -81,6 +85,40 @@ class RobotAction():
             self.iter_num = 0
         return feasibility    
     
+    def generate_trj_cartesian(self, n_pt = 120, Ti = None, Tf = None):
+        """
+        Ti = 3x1 vector of initial cartesian positons in m
+        Qf = 3x1 vector of final cartesian positions in m
+        n_pt = number of pts in the trjectory
+        -----
+        feasibility = admissibility check of the trajectory in the robot's workspace
+        """
+        if Ti == None and Tf == None:
+            A = 30
+            B = 15
+            th = np.linspace(0,2*np.pi, n_pt)
+            phi_y = np.deg2rad(30)
+            R_y = np.reshape([np.cos(phi_y), 0, np.sin(phi_y), 0, 1, 0,  -np.sin(phi_y), 0, np.cos(phi_y)], (3,3))
+            xe = A*np.cos(th)
+            ye = 30+B*np.sin(th)
+            ze = [20]*len(xe)
+            T = np.zeros((3,n_pt))
+            for i in range(n_pt):
+                T[:,i] = np.sum(R_y*np.array([xe[i],ye[i], ze[i]]),0)
+            self.inOutFnct.draw_trajectory(T)
+            feasibility= self.robot.admissible_cart_space(T) #to be debugged, raises a error
+        if not(feasibility):
+            self.Q =None
+            self.Qdot = None
+        else:
+            self.Q = np.zeros((3,n_pt))
+            for i in range(n_pt):
+                self.Q[:,i] = self.robot.inverse_kinematics(T[:,i])
+            self.Qdot = np.ones((3,n_pt))
+            self.iter_num = 0
+            print(np.rad2deg(self.Q))
+        return feasibility                 
+    
     def demo(self):
         print("trajecoty length:",len(self.Q))
         if self.iter_num< len(self.Q[0,:]):
@@ -92,6 +130,32 @@ class RobotAction():
             print("Demo completed !")
             return False
     
+    def demo2(self):
+        try:
+            self.iter_num = self.iter_num % len(self.Q[0,:])
+            self.goto_pose(self.Qdot[:,self.iter_num], self.Q[:, self.iter_num])
+            print(self.iter_num)
+            self.iter_num +=1
+            return True
+        except:
+            print("Demo2 not working !")
+            return False    
+    
+    def demo3(self, P_t, P_des, k):
+        """pose control"""
+        # P_des -> q_des
+        # get current P_t
+        # get current q_t
+        # e_t = P_des-P_t
+        # get Jacobian(q) J_t
+        print(P_t)
+        """
+        q_dot = np.inv(J_t)*k*I*e_t
+        for i in range(self.robot.leg_num):
+                for j in range(self.robot.joint_num):
+                        self.inOutFnct.set_vel(j,q_dot[j])
+        """
+        return True
     def leg_joints_positioning(self, vel, q, leg):
             #Control the joint angles of specified leg to go to q (deg) with specified vel.
             joint_ids = self.get_leg_slice(self.motor_ids,leg)
@@ -182,6 +246,7 @@ class RobotAction():
             else:
                 print("non admissible trajectories in transition")
                 return False
+
     def push(self, leg_ids, joint_vel, q_femur, q_tibia, underactuated):
                 #q_femur, q_tibia [deg] - final position, array of length = length(leg_ids)
                 #joint_vel [digit] - angular velocity of joints, array of length = length(leg_ids)
@@ -208,6 +273,7 @@ class RobotAction():
                         self.Q_cur[femur_joint_ids[i]-1] = np.radians(q_femur[leg_ids[i]-1]) #ignored if status ==0
                         self.Q_cur[tibia_joint_ids[i]-1] = np.radians(q_tibia[leg_ids[i]-1])
                         self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
+
     def pull(self, leg_ids, joint_vel, q_coxa, q_femur, q_tibia, underactuated):
         #q_femur, q_tibia, q_coxa [deg] - final position, array of length = length(leg_ids)
         #joint_vel [digit] - angular velocity of joints, array of length = length(leg_ids)
@@ -232,6 +298,7 @@ class RobotAction():
                 self.Q_cur[tibia_joint_ids[i]-1] = np.radians(q_tibia[leg_ids[i]-1])
                 self.Q_cur[coxa_joint_ids[i]-1] = np.radians(q_coxa[leg_ids[i]-1])
                 self.robot_angles_and_status.publish(self.Q_cur,self.joints_status)
+
     def get_contacts(self, msg):
         self.contacts[0:3] = msg.data[3:6]
         self.contacts[3:6] = msg.data[0:3]
@@ -493,15 +560,3 @@ class RobotAction():
 
         return SetBoolResponse(True, "Successfully completed 6 point sampling")
 
-if __name__ == '__main__':
-    rospy.init_node('silver2')
-
-    # prevhand is the handler set by the ROS runtime
-    prevhand = signal.signal(signal.SIGINT, handler)
-    controller = LocomotionController()
-
-    controller.loop()
-
-    # calls ROS signal handler manually
-    # this is to stop the rospy.spin thread
-    prevhand(signal.SIGINT, None)

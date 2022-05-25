@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class RobotPerceive(ABC):
+class RobotSensorsDrive(ABC):
     """
     This class represents the basic template which contains the necessary
     methods to acquire sensors data. 

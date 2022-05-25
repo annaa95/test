@@ -10,7 +10,14 @@ class RobotMotorControl(ABC):
 
     def __init__(self):
         pass
-    
+
+    @abstractmethod
+    def set_control_mode(self, motor_id, mode):
+        """
+        Set the control mode for motor with motor_id.
+        mode : {"posiiton", "velocity", "torque"}
+        """
+
     @abstractmethod
     def torque_enable(self, motor_id):
         """

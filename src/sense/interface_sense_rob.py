@@ -1,12 +1,10 @@
 from abc import abstractmethod
 
-from .interface import RobotInOut
+from interface_sense import RobotSensorsDrive
 
 import sys, tty, termios
 fd = sys.stdin.fileno()
 old_settings = termios.tcgetattr(fd)
-from dynamixel_sdk import *                             # Uses Dynamixel SDK library
-from dynamixel_communication.dynamixel_def import *     # Constant definitions
 import time
 import numpy as np
 
@@ -18,53 +16,12 @@ def getch():
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     return ch
 
-class RealRobot(RobotInOut):
+class RealRobot(RobotSensorsDrive):
     def __init__(self,
                 motor_list,
                  time_step=None):
         super(RealRobot, self).__init__(time_step)
         
-        self.motor_ids = range(1,len(motor_list)+1)
-        #Data structures defined: 
-        #   portHandler, 
-        self.portHandler = PortHandler(DEVICENAME) # Initialize port handler
-        #   packetHandler, 
-        self.packetHandler = PacketHandler(PROTOCOL_VERSION) # Initialize packet handler
-        #   groupSyncRead, current position
-        self.groupSyncRead = GroupSyncRead(self.portHandler, self.packetHandler, ADDR_PRO_PRESENT_POSITION, LEN_PRO_PRESENT_POSITION)       
-        #   groupSyncWrite, profile velocity and goal position
-        self.groupSyncWrite = GroupSyncWrite(self.portHandler, self.packetHandler, ADDR_PRO_PROFILE_VELOCITY, LEN_PRO_VEL_AND_POS)
-
-        #Open port, Set baudrate, Enable Torque of all motors, add param storage for SyncRead
-
-        # Open port
-        if self.portHandler.openPort():
-            print("Succeeded to open the port")
-        else:
-            print("Failed to open the port")
-            print("Press any key to terminate...")
-            getch()
-            quit()
-
-        # Set port baudrate
-        if self.portHandler.setBaudRate(BAUDRATE):
-            print("Succeeded to change the baudrate")
-        else:
-            print("Failed to change the baudrate")
-            print("Press any key to terminate...")
-            getch()
-            quit()
-
-        self.minpos, self.maxpos = self.get_pos_lim(self.motor_ids)
-
-        self.torque_enable(self.motor_ids)
-
-        # Add parameter storage for current position value
-        for i in self.motor_ids:
-            dxl_addparam_result = self.groupSyncRead.addParam(i)
-            if dxl_addparam_result != True:
-                print("[ID:%03d] groupSyncRead addparam failed" % i)
-                quit()
 
     def torque_enable(self, motor_id):
         if type(ids)==np.int32:

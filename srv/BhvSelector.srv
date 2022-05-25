@@ -1,5 +1,7 @@
 string type
-float64 nstep
+float32 nstep
+float32[] pose
+float32 gain
 ---
 bool success
 string status_message

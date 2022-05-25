@@ -6,7 +6,7 @@ import sys
 
 #sys.path.insert(1, '/home/anna/catkin_ws/src/silver3/src/act')
 
-from .robot_actions import RobotAction
+from robot_actions import RobotAction
 import rospy
 import signal
 import time
@@ -43,13 +43,23 @@ class RobotActionRos(RobotAction):
         self.motor_status_pub= rospy.Publisher('robot_action/motor_status', Float32MultiArray, queue_size=10)
         rospy.Timer(rospy.Duration(self.ctrl_timestep), self.publish_motor_status)
         self.motor_status = Float32MultiArray()
+
+        #ROS subscribers (to sensors data)
+        self.ee_pose_subscriber = rospy.Subscriber('robot_sensing/ee_pose', Float32MultiArray, self.get_ee_pose)
     
+    def advance_time(self):
+        if self.runwbt:
+            advance_sim_time = True
+        else:
+            advance_sim_time = (self.inOutFnct.wbfnct.step(5*self.inOutFnct.timestep) != -1)
+        return advance_sim_time
+
     def loop(self):
         rosthread = threading.Thread(target=self.ros_spin)
         rosthread.deamon = True
         rosthread.start()
-        
-        while True:
+
+        while  True and self.advance_time():
 
             if self.should_quit:
                 break
@@ -57,7 +67,7 @@ class RobotActionRos(RobotAction):
             if self.bhv_running:
                 if self.bhv_type== "demo":
                     """
-                    The manipulator span the workpace of all joints sequentially
+                    The manipulator performs a trajectory in the joint space - OL single shot bhv
                     """ 
                     if self.demo():
                         continue
@@ -65,8 +75,22 @@ class RobotActionRos(RobotAction):
                         self.bhv_running = False
                 elif self.bhv_type == "demo2":
                     """
-                    other stuff
+                    The manipulator performs a trajectory specified in cartesian coordinates - OL cyclic bhv
                     """
+                    if self.demo2():
+                        continue
+                    else:
+                        self.bhv_running = False
+                elif self.bhv_type == "demo3":
+                    """
+                    The manipulator uses the gyroscope to follow a path in cartesian coordinates
+                    with the EE_rf y axis always tangent to the trajectory - closed loop bhv
+                    """
+                    
+                    if self.demo3([self.ee_xyz,self.ee_rpy],self.bhv_params['pose'], self.bhv_params['gain']):
+                        continue
+                    else:
+                        self.bhv_running = False
                 else:
                     print('unknown behavior')
             
@@ -102,7 +126,7 @@ class RobotActionRos(RobotAction):
             if self.bhv_params['nstep'] <= 0:
                 self.bhv_params['nstep'] = 120
 
-            # compute trajectory, check feasibility and apply inverse kinematics
+            # compute trajectory, check feasibility
             feasibility = self.generate_trj(int(self.bhv_params['nstep']))
             if feasibility:
                 # goto initial position
@@ -111,7 +135,42 @@ class RobotActionRos(RobotAction):
             else:
                 self.bhv_type = None
                 return BhvSelectorResponse(False, 'Failed to set demo. Non feasible EndEff trajectory.')
+        
+        elif req.type == 'demo2':
+            self.bhv_type = 'demo2'
+            self.bhv_params = {
+                'nstep': req.nstep,
+                }
+            # check params
+            if self.bhv_params['nstep'] <= 0:
+                self.bhv_params['nstep'] = 120
+            try: 
+                # compute trajectory, check feasibility and apply inverse kinematics
+                feasibility = self.generate_trj_cartesian(int(self.bhv_params['nstep']))
+            except: 
+                feasibility = True
 
+            if feasibility:
+                # goto initial position
+                self.goto_pose(self.Qdot[:,0],self.Q[:,0])
+                return BhvSelectorResponse(True, 'Demo2 successfully set.')
+            else:
+                self.bhv_type = None
+                return BhvSelectorResponse(False, 'Failed to set demo2. Non feasible EndEff trajectory.')
+        elif req.type == 'demo3':
+            self.bhv_type = 'demo3'
+            self.bhv_params = {
+                'pose': req.pose,
+                'gain': req.gain
+            }
+            #check params
+            if self.bhv_params['pose'] == None:
+                return BhvSelectorResponse(False, 'Failed to set demo3. Must provide a pose')
+            if self.bhv_params['gain'] == None:
+                self.bhv_params['gain'] =1
+            for i in range(3):
+                self.inOutFnct.set_control_mode(i, "velocity")     
+            return BhvSelectorResponse(True, 'Demo3 successfully set.')
         else:
             self.bhv_running = False
             self.bhv_type = None
@@ -126,6 +185,8 @@ class RobotActionRos(RobotAction):
                 print("starting demo")
             elif self.bhv_type == "demo2":
                 print("starting demo2")
+            elif self.bhv_type == "demo3":
+                print("starting demo3")
             else:
                 print("unknown bhv")
         else:
@@ -139,6 +200,10 @@ class RobotActionRos(RobotAction):
         self.motor_status.data.insert(0, rospy.get_time())
         self.motor_status_pub.publish(self.motor_status) 
 
+    def get_ee_pose(self, msg):
+        self.t_read = msg.data[0]
+        self.ee_xyz = msg.data[1:4]
+        self.ee_rpy = msg.data[4:5]
 
 def handler(signum, frame):
     global should_quit

@@ -6,8 +6,8 @@ from __future__ import division
 from itertools import product
 from scipy.spatial import Delaunay
 from scipy.linalg import svd
-
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import os, sys
 import time
@@ -99,7 +99,40 @@ class RobotGeom():
                 print("init pose: ", self.init_pose)
                 time.sleep(1)
                 
+        def adjoint_representation(self, joint_id, q):
+                """
+                This function returns the i-th column of the jacobian 
+                joint_id
+                q = joint positions
+                """
+                if joint_id == 1:
+                        J_si = self.screw_axis[:,joint_id]
+                else:
+                        T = np.eye(4) #see pag 100 Modoern Robotics
+                        for i in range(joint_id-1, 0, -1):
+                                # A*B*C = (A*B)*C = A*(B*C) proprietà associativa prodotto tra matrici
+                                T *= self.product_of_exponentials(screw_axis=self.screw_axis[:,i], displacement= q[i]) #homogeneous transformation from joint 0 to joint i-1
+                        R = product[0:3,0:3]
+                        p = product[0:3, 3]
+                        p_skew = self.v_to_vskew(p)
+                        Ad_T = np.zeros((6,6))
+                        Ad_T[0:3,0:3] = R 
+                        Ad_T[3:6,3:6] = R
+                        Ad_T[3:6,0:3] = p_skew*R 
+                        J_si = Ad_T*self.screw_axis[:,i]
+                return J_si
 
+        def get_jacobian(self, q):
+                self.J =np.zeros((6, self.joint_num))    
+                for i in range(self.joint_num):
+                        self.J[:,i] = self.adjoint_representation(i, q)
+                
+        def v_to_vskew(self,v):
+                v_skew = np.reshape(np.array([0, -v[2], v[1],   \
+                                        v[2], 0, -v[0],         \
+                                        -v[1],v[0], 0]),[3,3])
+                return v_skew
+           
         def product_of_exponentials(self, screw_axis, displacement):
                 """
                 Exponential coordinates of a homegeneous tranformation
@@ -111,9 +144,7 @@ class RobotGeom():
                 screw axis
                 """
                 omega = screw_axis[0:3]
-                omega_skew = np.reshape(np.array([0, -omega[2], omega[1],       \
-                                                omega[2], 0, -omega[0],         \
-                                                -omega[1],omega[0], 0]),[3,3])
+                omega_skew = self.v_to_vskew(omega)
                 v = screw_axis[3:6]
                 th = displacement
                 G= np.eye(3)*th+ (1-np.cos(th))*omega_skew+(th-np.sin(th))*omega_skew**2
@@ -139,7 +170,24 @@ class RobotGeom():
                 y = T[1,3]
                 z = T[2,3]
                 return np.array([x, y, z])
+        
+        def inverse_kinematics(self, P, leg_id=0):
+                x = P[0]
+                y = P[1]
+                z = P[2]
+                q0 = math.atan2(z,x)
 
+                r = np.sqrt(x**2+z**2)
+                L = math.sqrt(r**2+(y-self.l1)**2)
+                print((self.l2**2+self.l3**2-L**2)/(2*self.l2*self.l3))
+                q2 = math.pi - math.acos((self.l2**2+self.l3**2-L**2)/(2*self.l2*self.l3))
+
+                beta = math.asin(math.sin(math.pi-q2)*self.l3/L)
+                q1 = math.asin(r/L) - beta 
+                
+                q = np.array([q0, q1, q2])
+                return q                
+        
         def leg_inv_kine_coxa_plane(self, p):
                 #q = [q1, q2]: joint coords of tibia and femur joints
                 #p = [x_p, z_p]: foot tip position (2D) in the coxa plane
@@ -152,32 +200,29 @@ class RobotGeom():
                 return np.array([q2, q3])
 
 
-        def leg_inv_kine(self, tip_pos, leg_id):
-                x = tip_pos[0]
-                y = tip_pos[1]
-                z = tip_pos[2]
-
-                L = math.sqrt(x**2+y**2)
-                beta = math.atan2(y,x);
-                gamma = math.atan2(self.l1,math.sqrt(L**2-self.l1**2));
-                q1 = beta - self.mir[leg_id]*gamma
-                # x3,y3 are leg tip coords in coxa frame
-                x3 = x*math.cos(q1)+y*math.sin(q1)-self.l0;
-                y3 = z;
-                a = math.sqrt(x3**2+y3**2);
-                q2 = math.acos((self.l2**2+a**2-self.l3**2)/(2*self.l2*a)) + math.atan2(y3,x3);
-                q3 = math.pi - math.acos((self.l2**2+self.l3**2-a**2)/(2*self.l2*self.l3));
-                q = np.array([q1, q2, q3]);
-                return q
 
         def admissible_cart_space(self, T):
-                if not isinstance(self.cloud,Delaunay):
-                        ws = Delaunay(self.cloud)
-                        test = ws.find_simplex(T)>=0
-                if np.size(test) == 1: #generalize to scalar case
-                    return test
-                else:
-                    return all(test)
+                try:
+                        isinstance(self.cloud,Delaunay)
+                        if not isinstance(self.cloud,Delaunay):
+                                try:
+                                        ws = Delaunay(self.cloud)
+                                        try:
+                                                test = ws.find_simplex(T)>=0
+                                                if np.size(test) == 1: #generalize to scalar case
+                                                        return test
+                                                else:
+                                                        return all(test)
+                                        except:
+                                                print("Error in find simplex")
+
+                                except:
+                                        print("Error in delaunay")
+                except:
+                        print("isinstance error")
+                        return False
+
+
         
         def admissible_joint_space(self, Q):
                 for i in range(3):
@@ -188,7 +233,6 @@ class RobotGeom():
                                         return False
                 return True
                                         
-
                 
         def cartesian2joint_traj(self, T, dT):
                 """
