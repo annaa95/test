@@ -5,14 +5,15 @@ WorldInfo {
   ]
   title "seabed"
   window "generic"
+  basicTimeStep 4
   coordinateSystem "NUE"
 }
 Viewpoint {
   fieldOfView 1.1
-  orientation -0.6402824080725326 0.5939068683533691 0.48714789298069705 2.1471130162434413
-  position -0.09380311932106933 0.5663796556720047 1.883817820107211
+  orientation -0.5773502691896258 0.5773502691896257 0.5773502691896258 2.0943951023931953
+  position 3.994065788503808e-06 0.2618398871115897 1.3688396303518007
   near 0.01
-  follow "simulated_robot"
+  exposure 1.5
   ambientOcclusionRadius 4
 }
 TexturedBackground {
@@ -21,14 +22,14 @@ TexturedBackgroundLight {
 }
 DEF foot Floor {
   rotation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-  size 100 100
+  size 15 15
 }
 DEF tank SolidPipe {
-  translation 0 1.25 0
+  translation 0 0.75 0
   rotation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-  height 2.5
-  radius 100
-  thickness 0.9
+  height 1.5
+  radius 4.3
+  thickness 0.3
   subdivision 80
   appearance PBRAppearance {
     baseColor 0.5 0.5 0.5
@@ -37,8 +38,26 @@ DEF tank SolidPipe {
     metalness 0
   }
 }
+Solid {
+  translation 0 1.5 0
+  rotation 1 0 0 1.57
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0 0 0
+        transparency 0.5
+        metalness 0
+      }
+      geometry Cylinder {
+        height 0.1
+        radius 4.3
+      }
+    }
+  ]
+}
 DEF water Fluid {
-  translation 0 1.1 0
+  translation 0 0.75 0
+  rotation 1 0 0 1.57
   children [
     DEF Filling Shape {
       appearance DEF water_like PBRAppearance {
@@ -48,1054 +67,287 @@ DEF water Fluid {
         metalness 0
       }
       geometry Cylinder {
-        height 2.2
-        radius 99.9
+        height 1.5
+        radius 4
       }
     }
   ]
   name "water tank"
   boundingObject USE Filling
 }
-DEF Tank_bottom Transform {
-  rotation -1 0 0 1.5707963267948966
+DEF uw_gripper Robot {
   children [
-    DEF tank_bottom Shape {
-      appearance PBRAppearance {
-        baseColor 0 1 1
-        transparency 0.2
-        roughness 1.11e-16
-        metalness 0
-      }
-      geometry Cylinder {
-        height 0.02
-        radius 100
-      }
-    }
-  ]
-}
-DEF silver3 Robot {
-  translation -0.0011445961812890115 0.43092398128002246 -1.1776596545421419e-06
-  rotation 0.5507776184229476 0.0006927044291141516 0.8346517448642395 -0.0002622032509376588
-  children [
-    DEF R1_COXA HingeJoint {
-      jointParameters DEF R1C_joint_params HingeJointParameters {
-        position 3.893625661561092e-06
-        axis 0 1 0
-        anchor 0.175 0 0.2
-      }
-      device [
-        RotationalMotor {
-          name "R1_Cmotor"
-          minPosition -0.8
-          maxPosition 0.8
-          maxTorque 100
-        }
-      ]
-      endPoint DEF ep_R1C Solid {
-        translation 0.175 0 0.2
-        rotation 0 1 0 3.8936252318201126e-06
-        children [
-          DEF CoxaR Transform {
-            rotation -1 0 0 1.5707963267948966
-            children [
-              DEF joint_shape Shape {
-                appearance DEF Joint_Appearance PBRAppearance {
-                  metalness 0
-                }
-                geometry DEF Joint_geometry Cylinder {
-                  height 0.07
-                  radius 0.03
-                }
-              }
-            ]
-          }
-          DEF C2FshiftR Transform {
-            translation 0.04 -0.035 0
-            children [
-              DEF segment Shape {
-                appearance DEF link_appearance PBRAppearance {
-                  baseColor 0 0 0
-                  metalness 0
-                }
-                geometry DEF segment_shape Box {
-                  size 0.08 0.03 0.03
-                }
-              }
-            ]
-          }
-          DEF HipR Transform {
-            translation 0.08 -0.035 0
-            rotation -1 0 0 0.0007963267950484548
-            children [
-              USE joint_shape
-            ]
-          }
-          DEF R1_HIP HingeJoint {
-            jointParameters DEF R1H_joint_params HingeJointParameters {
-              position -0.7000022417273255
-              axis 0 0 1
-              anchor 0.08 -0.035 0
-            }
-            device [
-              RotationalMotor {
-                name "R1_Hmotor"
-                minPosition -1.6
-                maxPosition 1.6
-                maxTorque 200
-              }
-            ]
-            endPoint DEF ep_R1H Solid {
-              translation 0.08 -0.035 0
-              rotation 0 0 -0.9999999999999999 0.7000022417273254
-              children [
-                DEF R1_KNEE_act HingeJoint {
-                  jointParameters DEF R1K_Actjoint_params HingeJointParameters {
-                    position -1.7872914302906424
-                    axis 0 0 1
-                    anchor 0.3 0 0
-                  }
-                  device [
-                    RotationalMotor {
-                      name "R1_Kmotor"
-                      minPosition -2.9
-                      maxPosition 0.8
-                      maxTorque 200
-                    }
-                  ]
-                  endPoint DEF ep_R1Kactive Solid {
-                    translation 0.3 0 0
-                    rotation 0 0 -1 1.7872914302906424
-                    children [
-                      DEF R1_KNEE_pass HingeJoint {
-                        jointParameters DEF R1K_Passjoint_params HingeJointParameters {
-                          position -0.023812765954358012
-                          axis 0 0 1
-                          springConstant 60
-                        }
-                        endPoint DEF ep_R1Kpassive Solid {
-                          rotation 0 0 -1 0.023812765954359157
-                          children [
-                            DEF tibiaR Transform {
-                              translation 0.13 0 0
-                              children [
-                                DEF tibia_T1 Shape {
-                                  appearance USE link_appearance
-                                  geometry DEF tibia Box {
-                                    size 0.27 0.03 0.03
-                                  }
-                                }
-                              ]
-                            }
-                            DEF footR1 Transform {
-                              translation 0.2915 0 0
-                              children [
-                                DEF foot_R_solid Solid {
-                                  children [
-                                    DEF footR1_shape Shape {
-                                      appearance DEF foot PBRAppearance {
-                                        baseColor 1 1 0
-                                        metalness 0
-                                      }
-                                      geometry DEF foot Sphere {
-                                        radius 0.031
-                                      }
-                                    }
-                                  ]
-                                  boundingObject USE footR1_shape
-                                  physics Physics {
-                                    mass 0.05
-                                  }
-                                }
-                              ]
-                            }
-                            TouchSensor {
-                              translation 0.29150247596122697 -3.4973301489549247e-06 -1.1105521113830008e-08
-                              rotation -0.5773502935486855 -0.5773502207518263 -0.5773502932683623 2.0943951751383176
-                              children [
-                                Transform {
-                                  rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                }
-                              ]
-                              name "R1_touch"
-                              boundingObject Transform {
-                                rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                children [
-                                  USE footR1_shape
-                                ]
-                              }
-                              physics Physics {
-                                density -1
-                                mass 0.05
-                              }
-                            }
-                          ]
-                          name "ep_R1Kactive"
-                          boundingObject USE joint_shape
-                          physics Physics {
-                            mass 0.05
-                          }
-                        }
-                      }
-                    ]
-                    boundingObject USE joint_shape
-                    physics Physics {
-                      mass 0.05
-                    }
-                  }
-                }
-                DEF kneeR Transform {
-                  translation 0.3 0 0
-                  rotation -1 0 0 0.0007963267950484548
-                  children [
-                    USE joint_shape
-                  ]
-                }
-                DEF femurR Transform {
-                  translation 0.15 0 0
-                  children [
-                    DEF femur Shape {
-                      appearance USE link_appearance
-                      geometry DEF femur Box {
-                        size 0.3 0.03 0.03
-                      }
-                    }
-                  ]
-                }
-              ]
-              name "ep_R1H"
-              boundingObject USE joint_shape
-              physics Physics {
-                mass 0.05
-              }
-            }
-          }
-        ]
-        name "ep_R1C"
-        boundingObject USE joint_shape
-        physics Physics {
-          mass 0.05
-        }
-      }
-    }
-    DEF R2_COXA HingeJoint {
-      jointParameters DEF R2C_joint_params HingeJointParameters {
-        position 3.870218925137203e-06
-        axis 0 1 0
-        anchor 0.175 0 0
-      }
-      device [
-        RotationalMotor {
-          name "R2_Cmotor"
-          minPosition -0.785
-          maxPosition 0.785
-          maxTorque 100
-        }
-      ]
-      endPoint DEF ep_R2C Solid {
-        translation 0.175 0 0
-        rotation 0 1 0 3.8701732351184984e-06
-        children [
-          DEF R2_HIP HingeJoint {
-            jointParameters DEF R2_H HingeJointParameters {
-              position -0.7000022322493871
-              axis 0 0 1
-              anchor 0.08 -0.035 0
-            }
-            device [
-              RotationalMotor {
-                name "R2_Hmotor"
-                minPosition -1.57
-                maxPosition 1.57
-                maxTorque 200
-              }
-            ]
-            endPoint DEF ep_R2H Solid {
-              translation 0.08 -0.035 0
-              rotation 0 0 -1 0.7000022322493868
-              children [
-                DEF R2_KNEE_act HingeJoint {
-                  jointParameters DEF R2K_Actjoint_params HingeJointParameters {
-                    position -1.7872914365709138
-                    axis 0 0 1
-                    anchor 0.3 0 0
-                  }
-                  device [
-                    RotationalMotor {
-                      name "R2_Kmotor"
-                      minPosition -2.85
-                      maxPosition 0.785
-                      maxTorque 200
-                    }
-                  ]
-                  endPoint DEF ep_R2Kactive Solid {
-                    translation 0.3 0 0
-                    rotation 0 0 -1 1.7872914365709138
-                    children [
-                      DEF R2_KNEE_pass HingeJoint {
-                        jointParameters DEF R2K_Passjoint_params HingeJointParameters {
-                          position -0.023917480060403166
-                          axis 0 0 1
-                          springConstant 60
-                        }
-                        endPoint DEF ep_R2Kpassive Solid {
-                          rotation 0 0 -1 0.02391748006040808
-                          children [
-                            DEF tibia Transform {
-                              translation 0.13 0 0
-                              children [
-                                DEF tibia Shape {
-                                  appearance USE link_appearance
-                                  geometry DEF tibia Box {
-                                    size 0.27 0.03 0.03
-                                  }
-                                }
-                              ]
-                            }
-                            DEF footR2 Transform {
-                              translation 0.2915 0 0
-                              children [
-                                DEF R2_solid_foot Solid {
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                  boundingObject USE footR1_shape
-                                  physics Physics {
-                                    mass 0.05
-                                  }
-                                }
-                              ]
-                            }
-                            TouchSensor {
-                              translation 0.29150243676978693 -3.516125064245701e-06 -1.1022882883505525e-08
-                              rotation -0.577350293424101 -0.5773502209990737 -0.5773502931456996 2.0943951747669254
-                              children [
-                                Transform {
-                                  rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                }
-                                USE footR1_shape
-                              ]
-                              name "R2_touch"
-                              physics Physics {
-                                density -1
-                                mass 0.05
-                              }
-                            }
-                          ]
-                          name "ep_R2Kpassive"
-                          boundingObject USE joint_shape
-                          physics Physics {
-                            mass 0.05
-                          }
-                        }
-                      }
-                    ]
-                    boundingObject USE joint_shape
-                    physics Physics {
-                      mass 0.05
-                    }
-                  }
-                }
-                USE kneeR
-                USE femurR
-              ]
-              name "ep_R2H"
-              boundingObject USE joint_shape
-              physics Physics {
-                mass 0.05
-              }
-            }
-          }
-          USE C2FshiftR
-          USE CoxaR
-          USE HipR
-        ]
-        name "ep_R2C"
-        boundingObject USE joint_shape
-        physics Physics {
-          mass 0.05
-        }
-      }
-    }
-    DEF R3_COXA HingeJoint {
-      jointParameters DEF R3C_joint_params HingeJointParameters {
-        position 3.847757781900646e-06
-        axis 0 1 0
-        anchor 0.175 0 -0.2
-      }
-      device [
-        RotationalMotor {
-          name "R3_Cmotor"
-          minPosition -0.8
-          maxPosition 0.8
-          maxTorque 200
-        }
-      ]
-      endPoint DEF ep_R3C Solid {
-        translation 0.175 0 -0.2
-        rotation 0 1 0 3.847732589199248e-06
-        children [
-          DEF R3_HIP HingeJoint {
-            jointParameters DEF R3H_joint_params HingeJointParameters {
-              position -0.7000022126730447
-              axis 0 0 1
-              anchor 0.08 -0.035 0
-            }
-            device [
-              RotationalMotor {
-                name "R3_Hmotor"
-                maxTorque 200
-              }
-            ]
-            endPoint DEF ep_R3H Solid {
-              translation 0.08 -0.035 0
-              rotation 0 0 -1 0.7000022126730446
-              children [
-                DEF R3_KNEE_act HingeJoint {
-                  jointParameters DEF R3K_joint_params HingeJointParameters {
-                    position -1.7872914080237483
-                    axis 0 0 1
-                    anchor 0.3 0 0
-                  }
-                  device [
-                    RotationalMotor {
-                      name "R3_Kmotor"
-                      maxTorque 200
-                    }
-                  ]
-                  endPoint DEF ep_R3K Solid {
-                    translation 0.3 0 0
-                    rotation 0 0 -1 1.7872914080237483
-                    children [
-                      DEF R3_KNEE_pass HingeJoint {
-                        jointParameters DEF R2_Kpassive_jp HingeJointParameters {
-                          position -0.02344082248236252
-                          axis 0 0 1
-                          springConstant 60
-                        }
-                        endPoint DEF ep_R3K_passive Solid {
-                          rotation 0 0 -1 0.023440822482355204
-                          children [
-                            DEF tibia Transform {
-                              translation 0.13 0 0
-                              children [
-                                DEF tibia Shape {
-                                  appearance USE link_appearance
-                                  geometry DEF tibia Box {
-                                    size 0.27 0.03 0.03
-                                  }
-                                }
-                              ]
-                            }
-                            DEF R3_foot_transf Transform {
-                              translation 0.291 0 0
-                              children [
-                                DEF R3_solid_foot Solid {
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                  boundingObject USE footR1_shape
-                                  physics Physics {
-                                    mass 0.05
-                                  }
-                                }
-                              ]
-                            }
-                            TouchSensor {
-                              translation 0.2915020095029499 -4.9430350008289325e-06 -1.1291254209400137e-08
-                              rotation -0.5773502963942228 -0.5773502150703461 -0.5773502961043044 2.0943951836652777
-                              children [
-                                Transform {
-                                  rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                }
-                              ]
-                              name "R3_touch"
-                              boundingObject Transform {
-                                rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                children [
-                                  USE footR1_shape
-                                ]
-                              }
-                              physics Physics {
-                                density -1
-                                mass 0.05
-                              }
-                            }
-                          ]
-                          boundingObject USE joint_shape
-                          physics Physics {
-                            mass 0.05
-                          }
-                        }
-                      }
-                    ]
-                    boundingObject USE joint_shape
-                    physics Physics {
-                      mass 0.05
-                    }
-                  }
-                }
-                USE kneeR
-                USE femurR
-              ]
-              boundingObject USE joint_shape
-              physics Physics {
-                mass 0.05
-              }
-            }
-          }
-          USE C2FshiftR
-          USE CoxaR
-          USE HipR
-        ]
-        name "ep_R3C"
-        boundingObject USE joint_shape
-        physics Physics {
-          mass 0.05
-        }
-      }
-    }
-    DEF L1_COXA HingeJoint {
-      jointParameters DEF L1C_joint_params HingeJointParameters {
-        position -3.819282711425842e-06
-        axis 0 1 0
-        anchor -0.175 0 0.2
-      }
-      device [
-        RotationalMotor {
-          name "L1_Cmotor"
-          minPosition -0.785
-          maxPosition 2.35
-          maxTorque 200
-        }
-      ]
-      endPoint DEF ep_L1C Solid {
-        translation -0.175 0 0.2
-        rotation 0 -1 0 3.819234764548991e-06
-        children [
-          DEF L1_HIP HingeJoint {
-            jointParameters DEF L1_HIP HingeJointParameters {
-              position 0.7000021891197395
-              axis 0 0 1
-              anchor -0.08 -0.035 0
-            }
-            device [
-              RotationalMotor {
-                name "L1_Hmotor"
-                maxTorque 200
-              }
-            ]
-            endPoint DEF ep_L1H Solid {
-              translation -0.08 -0.035 0
-              rotation 0 0 1 0.7000021891197393
-              children [
-                DEF L1_KNEE_act HingeJoint {
-                  jointParameters DEF L1K_joint_params HingeJointParameters {
-                    position 1.7872913656436056
-                    axis 0 0 1
-                    anchor -0.3 0 0
-                  }
-                  device [
-                    RotationalMotor {
-                      name "L1_Kmotor"
-                      maxTorque 200
-                    }
-                  ]
-                  endPoint DEF ep_L1K Solid {
-                    translation -0.3 0 0
-                    rotation -0.7793610649351133 0.6265747723027866 0.0006206262300942573 3.1405947369012868
-                    children [
-                      DEF L1_KNEE_pass HingeJoint {
-                        jointParameters DEF L1_K_passive_jp HingeJointParameters {
-                          position -0.022782774517518135
-                          axis 0 0 1
-                          springConstant 60
-                        }
-                        endPoint DEF L1K_passive_ep Solid {
-                          rotation 0 0 -1 0.022782774517512917
-                          children [
-                            DEF tibiaL1 Transform {
-                              translation 0.13 0 0
-                              children [
-                                USE tibia_T1
-                              ]
-                            }
-                            DEF L1_foot_transf Transform {
-                              translation 0.291 0 0
-                              children [
-                                DEF L1_solid_foot Solid {
-                                  children [
-                                    DEF footR1_shape Shape {
-                                      appearance DEF foot PBRAppearance {
-                                        baseColor 1 1 0
-                                        metalness 0
-                                      }
-                                      geometry DEF foot Sphere {
-                                        radius 0.031
-                                      }
-                                    }
-                                  ]
-                                  boundingObject DEF footR1_shape Shape {
-                                    appearance DEF foot PBRAppearance {
-                                      baseColor 1 1 0
-                                      metalness 0
-                                    }
-                                    geometry DEF foot Sphere {
-                                      radius 0.031
-                                    }
-                                  }
-                                  physics Physics {
-                                    mass 0.05
-                                  }
-                                }
-                              ]
-                            }
-                            TouchSensor {
-                              translation 0.2915020583384745 -4.847722843454028e-06 -2.861404871379314e-08
-                              rotation -0.5773502965210673 -0.5773502152837904 -0.577350295764016 2.0943951835710455
-                              children [
-                                Transform {
-                                  rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                }
-                              ]
-                              name "L1_touch"
-                              boundingObject Transform {
-                                rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                children [
-                                  USE footR1_shape
-                                ]
-                              }
-                              physics Physics {
-                                density -1
-                                mass 0.05
-                              }
-                            }
-                          ]
-                          boundingObject USE joint_shape
-                          physics Physics {
-                            mass 0.05
-                          }
-                        }
-                      }
-                    ]
-                    boundingObject USE joint_shape
-                    physics Physics {
-                      mass 0.05
-                    }
-                  }
-                }
-                DEF kneeL Transform {
-                  translation -0.3 0 0
-                  rotation -1 0 0 0.0007963267950484548
-                  children [
-                    USE joint_shape
-                  ]
-                }
-                DEF femurL Transform {
-                  translation -0.13 0 0
-                  children [
-                    DEF femur Shape {
-                      appearance USE link_appearance
-                      geometry Box {
-                        size 0.3 0.03 0.03
-                      }
-                    }
-                  ]
-                }
-              ]
-              boundingObject USE joint_shape
-              physics Physics {
-                mass 0.05
-              }
-            }
-          }
-          DEF HipL Transform {
-            translation -0.08 -0.035 0
-            rotation -1 0 0 0.0007963267950484548
-            children [
-              USE joint_shape
-            ]
-          }
-          DEF C2FshiftL Transform {
-            translation -0.04 -0.035 0
-            children [
-              USE segment
-            ]
-          }
-          DEF CoxaL Transform {
-            rotation -1 0 0 1.5707963267948966
-            children [
-              USE joint_shape
-            ]
-          }
-        ]
-        name "endpointL1"
-        boundingObject USE joint_shape
-        physics Physics {
-          mass 0.05
-        }
-      }
-    }
-    DEF L2_COXA HingeJoint {
-      jointParameters DEF L2C_joint_params HingeJointParameters {
-        position -3.8275550560129545e-06
-        axis 0 1 0
-        anchor -0.175 0 0
-      }
-      device [
-        RotationalMotor {
-          name "L2_Cmotor"
-          minPosition -0.785
-          maxPosition 2.35
-          maxTorque 200
-        }
-      ]
-      endPoint DEF endpointL2 Solid {
-        translation -0.175 0 0
-        rotation 0 -1 0 3.827597553682733e-06
-        children [
-          DEF L2_HIP HingeJoint {
-            jointParameters DEF L2_H_joint_params HingeJointParameters {
-              position 0.7000021951392809
-              axis 0 0 1
-              anchor -0.08 -0.035 0
-            }
-            device [
-              RotationalMotor {
-                name "L2_Hmotor"
-                maxTorque 200
-              }
-            ]
-            endPoint DEF ep_L2H Solid {
-              translation -0.08 -0.035 0
-              rotation 0 0 1 0.7000021951392807
-              children [
-                DEF L2_KNEE_act HingeJoint {
-                  jointParameters DEF L2K_joint_params HingeJointParameters {
-                    position 1.787291372674676
-                    axis 0 0 1
-                    anchor -0.3 0 0
-                  }
-                  device [
-                    RotationalMotor {
-                      name "L2_Kmotor"
-                      maxTorque 200
-                    }
-                  ]
-                  endPoint DEF ep_L2K Solid {
-                    translation -0.3 0 0
-                    rotation 0 0 0.9999999999999999 1.787291372674676
-                    children [
-                      DEF L2_KNEE_pass HingeJoint {
-                        jointParameters DEF L2_Kpssive_jp HingeJointParameters {
-                          position 0.022899844867820585
-                          axis 0 0 1
-                          springConstant 60
-                        }
-                        endPoint DEF ep_L2K_passive Solid {
-                          rotation 0 0 0.9999999999999999 0.02289984486782843
-                          children [
-                            DEF tibia Transform {
-                              translation -0.13 0 0
-                              children [
-                                USE tibia_T1
-                              ]
-                            }
-                            DEF L2_foot_transf Transform {
-                              translation -0.291 0 0
-                              children [
-                                DEF L2_solid_foot Solid {
-                                  children [
-                                    DEF footR1_shape Shape {
-                                      appearance DEF foot PBRAppearance {
-                                        baseColor 1 1 0
-                                        metalness 0
-                                      }
-                                      geometry DEF foot Sphere {
-                                        radius 0.031
-                                      }
-                                    }
-                                  ]
-                                  boundingObject DEF footR1_shape Shape {
-                                    appearance DEF foot PBRAppearance {
-                                      baseColor 1 1 0
-                                      metalness 0
-                                    }
-                                    geometry DEF foot Sphere {
-                                      radius 0.031
-                                    }
-                                  }
-                                  physics Physics {
-                                    mass 0.05
-                                  }
-                                }
-                              ]
-                            }
-                            TouchSensor {
-                              translation -0.2915020500613338 -4.858003671587285e-06 5.5611373639077475e-09
-                              rotation -0.5773502422269217 -0.577350323111373 -0.577350242230579 2.094395021312637
-                              children [
-                                Transform {
-                                  rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                }
-                              ]
-                              name "L2_touch"
-                              boundingObject Transform {
-                                rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                children [
-                                  USE footR1_shape
-                                ]
-                              }
-                              physics Physics {
-                                density -1
-                                mass 0.05
-                              }
-                            }
-                          ]
-                          boundingObject USE joint_shape
-                          physics Physics {
-                            mass 0.05
-                          }
-                        }
-                      }
-                    ]
-                    boundingObject USE joint_shape
-                    physics Physics {
-                      mass 0.05
-                    }
-                  }
-                }
-                USE femurL
-                USE kneeL
-              ]
-              boundingObject USE joint_shape
-              physics Physics {
-                mass 0.05
-              }
-            }
-          }
-          USE HipL
-          USE C2FshiftL
-          USE CoxaL
-        ]
-        name "endpointL2"
-        boundingObject USE joint_shape
-        physics Physics {
-          mass 0.05
-        }
-      }
-    }
-    DEF L3_COXA HingeJoint {
-      jointParameters DEF L3C_joint_params HingeJointParameters {
-        position -3.835638002769315e-06
-        axis 0 1 0
-        anchor -0.175 0 -0.2
-      }
-      device [
-        RotationalMotor {
-          name "L3_Cmotor"
-          minPosition -0.8
-          maxPosition 0.8
-          maxTorque 200
-        }
-      ]
-      endPoint DEF ep_L3C Solid {
-        translation -0.17500099999616434 0 -0.20000100000383564
-        rotation 0 -1 0 3.8355947835918986e-06
-        children [
-          DEF L3_HIP HingeJoint {
-            jointParameters DEF L3H_joint_params HingeJointParameters {
-              position 0.7000022011139937
-              axis 0 0 1
-              anchor -0.08 -0.035 0
-            }
-            device [
-              RotationalMotor {
-                name "L3_Hmotor"
-                maxTorque 200
-              }
-            ]
-            endPoint DEF ep_L2H Solid {
-              translation -0.08 -0.035 0
-              rotation 0 0 1 0.7000022011139936
-              children [
-                DEF L3_KNEE_act HingeJoint {
-                  jointParameters DEF L3K_joint_params HingeJointParameters {
-                    position 1.7872913796620722
-                    axis 0 0 1
-                    anchor -0.3 0 0
-                  }
-                  device [
-                    RotationalMotor {
-                      name "L3_Kmotor"
-                      maxTorque 200
-                    }
-                  ]
-                  endPoint DEF ep_L3K Solid {
-                    translation -0.3 0 0
-                    rotation 0 0 1 1.7872913796620722
-                    children [
-                      DEF L3_KNEE_pass HingeJoint {
-                        jointParameters DEF L3_K_passive_jp HingeJointParameters {
-                          position 0.02301626181413814
-                          axis 0 0 1
-                          springConstant 60
-                        }
-                        endPoint DEF ep_LeK_passive Solid {
-                          rotation 0 0 1 0.023016261814144148
-                          children [
-                            DEF tibiaL Transform {
-                              translation -0.13 0 0
-                              children [
-                                DEF tibia Shape {
-                                  appearance USE link_appearance
-                                  geometry Box {
-                                    size 0.27 0.03 0.03
-                                  }
-                                }
-                              ]
-                            }
-                            DEF L3_foot_transf Transform {
-                              translation -0.291 0 0
-                              children [
-                                DEF L3_solid_foot Solid {
-                                  children [
-                                    DEF footR1_shape Shape {
-                                      appearance DEF foot PBRAppearance {
-                                        baseColor 1 1 0
-                                        metalness 0
-                                      }
-                                      geometry DEF foot Sphere {
-                                        radius 0.031
-                                      }
-                                    }
-                                  ]
-                                  boundingObject DEF footR1_shape Shape {
-                                    appearance DEF foot PBRAppearance {
-                                      baseColor 1 1 0
-                                      metalness 0
-                                    }
-                                    geometry DEF foot Sphere {
-                                      radius 0.031
-                                    }
-                                  }
-                                  physics Physics {
-                                    mass 0.05
-                                  }
-                                }
-                              ]
-                            }
-                            TouchSensor {
-                              translation -0.29150204175860495 -4.868223397194726e-06 5.6723795105462216e-09
-                              rotation -0.5773502422330239 -0.5773503230987258 -0.5773502422371241 2.094395021327509
-                              children [
-                                Transform {
-                                  rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                  children [
-                                    USE footR1_shape
-                                  ]
-                                }
-                              ]
-                              name "L3_touch"
-                              boundingObject Transform {
-                                rotation 0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0943951023931953
-                                children [
-                                  USE footR1_shape
-                                ]
-                              }
-                              physics Physics {
-                                density -1
-                                mass 0.05
-                              }
-                            }
-                          ]
-                          boundingObject USE joint_shape
-                          physics Physics {
-                            mass 0.05
-                          }
-                        }
-                      }
-                    ]
-                    boundingObject USE joint_shape
-                    physics Physics {
-                      mass 0.05
-                    }
-                  }
-                }
-                USE kneeL
-                USE femurL
-              ]
-              boundingObject USE joint_shape
-              physics Physics {
-                mass 0.05
-              }
-            }
-          }
-          USE HipL
-          USE C2FshiftL
-          USE CoxaL
-        ]
-        name "endpointL3"
-        boundingObject USE joint_shape
-        physics Physics {
-          mass 0.05
-        }
-      }
-    }
-    DEF Body_Group Group {
+    Transform {
+      translation 0 0.025 0
+      rotation 1 0 0 -1.57
       children [
-        Gyro {
-          name "CoM_omega"
-        }
-        Accelerometer {
-          name "CoM_acc"
-        }
-        DEF body_shape Shape {
+        DEF base Shape {
           appearance PBRAppearance {
             metalness 0
           }
-          geometry Box {
-            size 0.35 0.2 0.5
+          geometry Cylinder {
+            height 0.05
+            radius 0.2
+          }
+        }
+        DEF hj_shoulder1 HingeJoint {
+          jointParameters HingeJointParameters {
+            axis 0 0 1
+          }
+          device [
+            RotationalMotor {
+              name "motor0"
+              minPosition -3.14
+              maxPosition 3.14
+            }
+            PositionSensor {
+              name "encoder0"
+            }
+          ]
+          endPoint Solid {
+            translation 0 0 0.025
+            children [
+              Shape {
+                appearance PBRAppearance {
+                  baseColor 1 0 0
+                }
+                geometry Box {
+                  size 0.4 0.01 0.01
+                }
+              }
+              DEF joint_shape Shape {
+                appearance PBRAppearance {
+                  metalness 0
+                }
+                geometry Cylinder {
+                  height 0.1
+                  radius 0.04
+                }
+              }
+              DEF base_joint1 Transform {
+                translation 0 0 0.07
+                rotation 1 0 0 1.57
+                children [
+                  USE joint_shape
+                  DEF hj_shoulder2 HingeJoint {
+                    jointParameters HingeJointParameters {
+                      axis 0 0 1
+                    }
+                    device [
+                      RotationalMotor {
+                        name "motor1"
+                        minPosition -1.75
+                        maxPosition 1.75
+                      }
+                      PositionSensor {
+                        name "encoder1"
+                      }
+                    ]
+                    endPoint Solid {
+                      translation 6.344386831896803e-06 -4.063382961159346e-06 -6.0069854897009355e-09
+                      children [
+                        Transform {
+                          translation 0 0 0.05
+                          rotation 0 0 1 1.57
+                          children [
+                            Shape {
+                              appearance PBRAppearance {
+                                baseColor 1 0 0
+                              }
+                              geometry Box {
+                                size 0.08 0.01 0.01
+                              }
+                            }
+                          ]
+                        }
+                        Transform {
+                          translation 0 0.15 0
+                          children [
+                            DEF upperarm Shape {
+                              appearance PBRAppearance {
+                                baseColor 1 0.5 0
+                                metalness 0.9
+                              }
+                              geometry Box {
+                                size 0.04 0.3 0.04
+                              }
+                            }
+                          ]
+                        }
+                        DEF sh2_elbow Transform {
+                          translation 0 0.3 0
+                          children [
+                            USE joint_shape
+                            DEF hj_elbow HingeJoint {
+                              jointParameters HingeJointParameters {
+                                axis 0 0 1
+                              }
+                              device [
+                                RotationalMotor {
+                                  name "motor2"
+                                  minPosition -2.5
+                                  maxPosition 2.5
+                                }
+                                PositionSensor {
+                                  name "encoder2"
+                                }
+                              ]
+                              endPoint Solid {
+                                children [
+                                  Transform {
+                                    translation 0 0 0.05
+                                    rotation 0 0 1 1.57
+                                    children [
+                                      Shape {
+                                        appearance PBRAppearance {
+                                          baseColor 1 0 0
+                                        }
+                                        geometry Box {
+                                          size 0.08 0.01 0.01
+                                        }
+                                      }
+                                    ]
+                                  }
+                                  Transform {
+                                    translation 0 0.125 0
+                                    children [
+                                      DEF forearm Shape {
+                                        appearance PBRAppearance {
+                                          baseColor 1 0.5 0
+                                          metalness 0.5
+                                        }
+                                        geometry Box {
+                                          size 0.04 0.25 0.04
+                                        }
+                                      }
+                                    ]
+                                  }
+                                  DEF elbow_wrist Transform {
+                                    translation 0 0.25 0
+                                    children [
+                                      Shape {
+                                        appearance PBRAppearance {
+                                          baseColor 0 1 0
+                                          roughness 1
+                                          metalness 0.1
+                                        }
+                                        geometry Sphere {
+                                          radius 0.03
+                                        }
+                                      }
+                                      GPS {
+                                        name "ee_pose_sensor"
+                                      }
+                                      InertialUnit {
+                                        name "ee_pose_sensor2"
+                                      }
+                                    ]
+                                  }
+                                ]
+                                immersionProperties [
+                                  ImmersionProperties {
+                                  }
+                                ]
+                                boundingObject Transform {
+                                  translation 0 0.125 0
+                                  children [
+                                    DEF forearm Shape {
+                                      appearance PBRAppearance {
+                                      }
+                                      geometry Box {
+                                        size 0.04 0.25 0.04
+                                      }
+                                    }
+                                  ]
+                                }
+                                physics Physics {
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                      immersionProperties [
+                        ImmersionProperties {
+                        }
+                      ]
+                      boundingObject Transform {
+                        translation 0 0.15 0
+                        children [
+                          DEF upperarm Shape {
+                            appearance PBRAppearance {
+                            }
+                            geometry Box {
+                              size 0.04 0.3 0.04
+                            }
+                          }
+                        ]
+                      }
+                      physics Physics {
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+            immersionProperties [
+              ImmersionProperties {
+              }
+            ]
+            boundingObject DEF joint_shape Shape {
+              appearance PBRAppearance {
+              }
+              geometry Cylinder {
+                height 0.1
+                radius 0.04
+              }
+            }
+            physics Physics {
+            }
           }
         }
       ]
     }
   ]
-  name "simulated_robot"
-  immersionProperties [
-    ImmersionProperties {
-      fluidName "water tank"
-      referenceArea "xyz-projection"
-      dragForceCoefficients 0.4 0.5 0.4
-      dragTorqueCoefficients 0.1 0 0.1
-    }
-  ]
-  boundingObject USE body_shape
+  boundingObject Transform {
+    translation 0 0.025 0
+    rotation 1 0 0 -1.57
+    children [
+      USE base
+    ]
+  }
   physics Physics {
-    density -1
-    mass 34.8
-    centerOfMass [
-      0 0 0
-    ]
-    inertiaMatrix [
-      0.8458333333333332 1.086458333333333 0.47395833333333315
-      0 0 0
-    ]
   }
   controller "<extern>"
   supervisor TRUE
+  synchronization FALSE
+}
+DEF draw_trj Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor 1 0 0
+      emissiveColor 1 0 0
+    }
+  }
+  geometry DEF TRJ_LINE_SET IndexedLineSet {
+    coord Coordinate {
+      point [
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+        0 0 0
+      ]
+    }
+    coordIndex [
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ]
+  }
 }
