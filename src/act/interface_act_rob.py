@@ -28,10 +28,10 @@ def getch():
 
 class RealRobot(RobotMotorControl):
     def __init__(self,
-                motor_list,
+                motor_list=[0, 1,2],
                 limits_file='/locomotion/trajectories/limits.txt', 
                 time_step=None):
-        super(RealRobot, self).__init__(time_step)
+        super(RealRobot, self).__init__()
 
         self.motor_lock = threading.Lock()
         
@@ -132,12 +132,11 @@ class RealRobot(RobotMotorControl):
             else:
                 print("Dynamixel#%d - Torque Disabled" % i)  
 
-    @abstractmethod
     def get_pos(self,motor_id):
         """
         Return the current position of a given motor, in radians
         """
-        pass
+        return 1
     
     def set_pos(self, motor_id, vel, pos):
         # motor lock acquire and release prevents other thread to interfere in the
